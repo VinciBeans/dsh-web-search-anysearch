@@ -10,19 +10,30 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 ## 安装
 
-需要已初始化 `web` profile 的 DSH 安装（至少启动过一次 Web GUI）。在插件 checkout 目录执行：
+版本与宿主对齐：每个版本针对、并命名为对应的 `@deepseek-ai/dsh` 发布。
 
-```sh
+需要已初始化 `web` profile 的 DSH 安装（至少启动过一次 Web GUI）。
+
+### 从 npm 安装
+
+1. **npm `latest`**（`0.1.2-rc.1`，与 `rc` 通道同步）——兼容 dsh v0.1.2-alpha.1 ~ rc.1：
+
+   ```bash
+   dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
+   # 等价：dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@rc
+   ```
+
+npm 包内附预构建的宿主与浏览器 bundle，安装无需构建步骤。
+
+### 从源码安装
+
+源码版本 `0.1.2-rc.1`（即 GitHub Release `v0.1.2-rc.1` 发布的内容），用于本地开发：
+
+```bash
 dsh plugin --profile web add .
 ```
 
-发布到 npm 后，同样可通过注册表安装：
-
-```sh
-dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
-```
-
-`dsh` 以 `link:` 链接本目录，把 bundle 层追加进 `dsh.profile.bundles` 并应用 `cordis.patch.yml`（注册提供方行，**同时把 `web.searchProvider` 固定为 `anysearch`**；后应用的 patch 层仍然优先，部署方显式固定自己的值不受影响）。**重启 `dsh web`** 生效（bundle 层的变更只在启动时应用）。只验证、不启动可先跑：
+`dsh` 以 `link:` 链接本目录，把 bundle 层追加进 `dsh.profile.bundles` 并应用 `cordis.patch.yml`（注册提供方行，**同时把 `web.searchProvider` 固定为 `anysearch`**；后应用的 patch 层仍然优先，部署方显式固定自己的值不受影响）。代码变更后用 `npm run build` 重建。**重启 `dsh web`** 生效（bundle 层的变更只在启动时应用）。只验证、不启动可先跑：
 
 ```sh
 dsh --profile web --dump-config

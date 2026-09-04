@@ -10,19 +10,30 @@ Tested against dsh v0.1.2-alpha.1 ~ alpha.5 and v0.1.2-rc.1 (the host `ctx.web` 
 
 ## Install
 
-Requires a DSH install whose `web` profile has been initialized (start the Web GUI once). From the plugin checkout:
+Releases are version-aligned with the harness: each version is built for, and named after, the matching `@deepseek-ai/dsh` release.
 
-```sh
+Requires a DSH install whose `web` profile has been initialized (start the Web GUI once).
+
+### From npm
+
+1. **npm `latest`** (`0.1.2-rc.1`, kept in sync with `rc`) — compatible with dsh v0.1.2-alpha.1 ~ rc.1:
+
+   ```bash
+   dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
+   # equivalent: dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@rc
+   ```
+
+The npm package ships the prebuilt host and client bundles, so no build step is needed on install.
+
+### From source
+
+The source version — `0.1.2-rc.1`, what the GitHub Release `v0.1.2-rc.1` ships — is for local development:
+
+```bash
 dsh plugin --profile web add .
 ```
 
-Once published to npm, the same install works from the registry:
-
-```sh
-dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
-```
-
-`dsh` links the checkout, appends the bundle layer to `dsh.profile.bundles`, and applies `cordis.patch.yml`, which registers the provider row **and pins `web.searchProvider: anysearch`** (later patch layers still win, so a deployment that pins its own value keeps it). **Restart `dsh web`** to pick up bundle layers. Inspect before restarting:
+`dsh` links the checkout, appends the bundle layer to `dsh.profile.bundles`, and applies `cordis.patch.yml`, which registers the provider row **and pins `web.searchProvider: anysearch`** (later patch layers still win, so a deployment that pins its own value keeps it). Rebuild after any code change with `npm run build`. **Restart `dsh web`** to pick up bundle layers. Inspect before restarting:
 
 ```sh
 dsh --profile web --dump-config
