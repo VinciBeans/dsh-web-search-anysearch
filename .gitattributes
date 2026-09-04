@@ -1,0 +1,5 @@
+# Keep line endings stable across platforms; CI and npm builds expect LF.
+* text=auto eol=lf
+
+# Generated artifacts stay out of the repo (see .gitignore).
+lib/** -text

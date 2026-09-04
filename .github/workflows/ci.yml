@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    # 多版本兼容矩阵：对 dsh-v0.1.2-alpha.1 ~ alpha.5 与 dsh-v0.1.2-rc.1 各验一遍
+    # typecheck + build + test（宿主契约面六版一致，但分别验证才能守住承诺）。
+    strategy:
+      fail-fast: false
+      matrix:
+        harness:
+          - tag: dsh-v0.1.2-alpha.1
+            pin: cd5ef8148158c3a752a658978873241fdf8e2bbc
+          - tag: dsh-v0.1.2-alpha.2
+            pin: 0a53fb55bea101816fa226bb964ae2bed71c343b
+          - tag: dsh-v0.1.2-alpha.3
+            pin: dd6322d604e00eec1ba5e0c8541159906a21094a
+          - tag: dsh-v0.1.2-alpha.4
+            pin: 4e84901e6471b79ec0338099867ebb4606d12bb5
+          - tag: dsh-v0.1.2-alpha.5
+            pin: db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5
+          - tag: dsh-v0.1.2-rc.1
+            pin: a66e4702047846cdaa10c66c9d3df3951f5ea70d
+    steps:
+      - uses: actions/checkout@v4
+
+      # 宿主类型依赖用 file:../../deepseek-harness/... 指向下方检出（两个上级目录，
+      # 即 $RUNNER_WORKSPACE），必须携带已构建的 lib/types 产物；tsconfig 的
+      # paths 把 @deepseek-ai/cordis 固定到本包安装的拷贝，因此类型增广的模块
+      # 身份不依赖 harness 的 vendor 布局。
+      - name: Checkout DeepSeek-Harness (${{ matrix.harness.tag }})
+        run: |
+          git clone --depth 1 --branch ${{ matrix.harness.tag }} \
+            https://github.com/deepseek-ai/DeepSeek-Harness.git ../../deepseek-harness
+          # Pin the tag to the exact release commit; fail loud if it moved.
+          test "$(git -C ../../deepseek-harness rev-parse HEAD)" = "${{ matrix.harness.pin }}"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build harness lib (host type artifacts)
+        working-directory: ../../deepseek-harness
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm run build:lib
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Smoke check the host bundle
+        run: |
+          node --input-type=module -e "
+            const m = await import('./lib/index.js');
+            if ('default' in m) throw new Error('host bundle must not have a default export');
+            for (const k of ['name', 'Config', 'apply', 'ANYSEARCH_PROVIDER_ID']) if (!(k in m)) throw new Error('missing export ' + k);
+            const cfg = m.Config({});
+            if (cfg.apiKeyEnv !== 'ANYSEARCH_API_KEY') throw new Error('schema defaults broken');
+            console.log('host smoke ok');
+          "

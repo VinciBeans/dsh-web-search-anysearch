@@ -1,0 +1,11 @@
+# Pin AnySearch as the web_search backend, overriding the bundle patch.
+# Apply with
+#   dsh web --patch examples/use-anysearch.cordis.yml
+# or merge this row into your profile's cordis.patch.yml (a patch replaces the
+# targeted row's whole config, so fetchProvider is restated).
+# The GUI switch (设置 → 插件 → 插件配置 → AnySearch 搜索服务) is the primary way
+# to select the backend; this overlay wins for one whole launch, GUI included.
+- id: web
+  config:
+    searchProvider: anysearch
+    fetchProvider: http

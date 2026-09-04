@@ -1,0 +1,17 @@
+# AnySearch search provider for the dsh web seam, pinned as the selected
+# backend. The seam's `web.searchProvider` pin is fixed at launch, so this
+# layer replaces the shipped default (deepseek-official) with `anysearch` —
+# the switch provider this plugin registers then routes each search to the
+# backend the Plugins settings card names. A deployment that pins its own
+# value in a later layer still wins (later patch layers replace earlier ones).
+- id: web
+  config:
+    searchProvider: anysearch
+    fetchProvider: http
+
+- insert:
+    - id: web-search-anysearch
+      name: '@wenqi_bian/dsh-web-search-anysearch'
+      config:
+        searchProvider: anysearch
+        apiKeyEnv: ANYSEARCH_API_KEY

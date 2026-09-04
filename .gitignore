@@ -1,0 +1,8 @@
+node_modules/
+lib/
+.npm-cache/
+.npm/
+.pnpm-store/
+.dsh/
+*.tsbuildinfo
+dev.cordis.yml
