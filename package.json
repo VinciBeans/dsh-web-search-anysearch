@@ -45,6 +45,7 @@
     "index.d.ts",
     "client.d.ts",
     "examples",
+    "CHANGELOG.md",
     "README.md",
     "README.zh.md",
     "LICENSE"
