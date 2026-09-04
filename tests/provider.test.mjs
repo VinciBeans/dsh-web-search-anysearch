@@ -222,17 +222,35 @@ test('apply falls back to the composition entry without the settings seam', asyn
   assert.equal(captured.id, 'anysearch')
 })
 
-test('no settings installer in this dsh build warns and keeps the entry config', async () => {
+test('installs through whichever section installer the dsh build provides', async () => {
   const { apply } = await import('../lib/index.js')
+  const settingsSdk = await import('@deepseek-ai/dsh-settings')
   let captured
   let warned = false
+  let registeredNs
+  // The alpha shape hands the section to the module-level installer, which
+  // consumes a service exposing register()/watch(); the rc.1 shape rides a
+  // service method, and with neither present the plugin warns and keeps the
+  // composition entry. Either outcome keeps the provider registered.
+  const settings = {
+    register(ns) {
+      registeredNs = ns
+      return { get: () => ({}), watch: () => () => {} }
+    },
+  }
   const ctx = {
-    get: () => undefined,
+    get: (service) => service === 'settings' ? settings : undefined,
     inject: (tags, cb) => { cb(ctx) },
+    effect: () => () => {},
     logger: { warn: () => { warned = true } },
     web: { registerSearchProvider: (p) => { captured = p } },
   }
   apply(ctx, Config({}))
   assert.equal(captured.id, 'anysearch')
-  assert.equal(warned, true)
+  if (settingsSdk.installSettingsSection === undefined) {
+    // rc.1: the service has no method and the module has no free function.
+    assert.equal(warned, true)
+  } else {
+    assert.equal(registeredNs, 'web-search-anysearch')
+  }
 })
