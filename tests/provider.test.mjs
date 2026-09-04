@@ -240,6 +240,9 @@ test('installs through whichever section installer the dsh build provides', asyn
   }
   const ctx = {
     get: (service) => service === 'settings' ? settings : undefined,
+    // The alpha-era installer reads `sctx.settings` as a property (cordis
+    // scoped contexts expose services directly), not through get().
+    settings,
     inject: (tags, cb) => { cb(ctx) },
     effect: () => () => {},
     logger: { warn: () => { warned = true } },
