@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Verified
+
+- **dsh v0.1.3-alpha.2** (pin `82a5fd61a7`). No code change was needed: a
+  contract-surface review of v0.1.2-rc.1 → v0.1.3-alpha.2 found the consumed
+  pieces unchanged (`ctx.web` seam and provider contract, settings
+  `installSection`, credentials, launch-environment, the DeepSeek search
+  provider and its options, the `dsh.client` boot/manifest contract, the
+  `settings.plugin.item` slot, `settingsScope`, locale and the client module
+  table; only the `dsh.client` declaration types moved to
+  `@deepseek-ai/dsh-package-manifest`, and the built-in cards switched their
+  badges to the `Tag` primitive). The base bundle still pins
+  `web.searchProvider: deepseek-official`, so the bundle-patch override applies
+  as before. CI now runs the full matrix — v0.1.2-alpha.1 ~ alpha.5, rc.1 and
+  v0.1.3-alpha.2 — green.
+
 ## [0.1.2-rc.1] - 2026-09-04
 
 First release of the switch-card build. The version tracks the dsh release

@@ -6,7 +6,7 @@ dsh exposes one model-facing `web_search` tool and picks the real backend throug
 
 ## Compatibility
 
-Tested against dsh v0.1.2-alpha.1 ~ alpha.5 and v0.1.2-rc.1 (the host `ctx.web` contract is identical across the six tags; the CI matrix verifies each one).
+Tested against dsh v0.1.2-alpha.1 ~ alpha.5, v0.1.2-rc.1 and v0.1.3-alpha.2 (the contract surface this plugin consumes is identical across the seven tags; the CI matrix verifies each one).
 
 ## Install
 
