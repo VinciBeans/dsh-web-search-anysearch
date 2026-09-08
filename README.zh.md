@@ -16,11 +16,18 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 ### 从 npm 安装
 
-1. **npm `latest`**（`0.1.3-alpha.2`，与 `alpha` 通道同步）——兼容 dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2：
+按你的宿主版本选择 dist-tag：
+
+1. **npm `alpha`**（`0.1.3-alpha.2`）——兼容 dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2：
+
+   ```bash
+   dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
+   ```
+
+2. **npm `latest`**（`0.1.2-rc.1`）——上一代版本，兼容 dsh v0.1.2-alpha.1 ~ rc.1：
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
-   # 等价：dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
    ```
 
 npm 包内附预构建的宿主与浏览器 bundle，安装无需构建步骤。

@@ -16,11 +16,18 @@ Requires a DSH install whose `web` profile has been initialized (start the Web G
 
 ### From npm
 
-1. **npm `latest`** (`0.1.3-alpha.2`, kept in sync with `alpha`) — compatible with dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2:
+Pick the dist-tag that matches your harness:
+
+1. **npm `alpha`** (`0.1.3-alpha.2`) — compatible with dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2:
+
+   ```bash
+   dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
+   ```
+
+2. **npm `latest`** (`0.1.2-rc.1`) — the previous generation, compatible with dsh v0.1.2-alpha.1 ~ rc.1:
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
-   # equivalent: dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
    ```
 
 The npm package ships the prebuilt host and client bundles, so no build step is needed on install.
