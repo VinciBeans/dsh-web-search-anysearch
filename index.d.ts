@@ -48,6 +48,31 @@ export declare const ANYSEARCH_BACKEND_DEEPSEEK: 'deepseek-official'
 /** Settings namespace of the built-in DeepSeek search provider (read for the official backend). */
 export declare const DEEPSEEK_SEARCH_SETTINGS_NAMESPACE: 'web-search-deepseek'
 
+/** Local default mirrors used when the optional official package exports no constants. */
+export declare const DEEPSEEK_FALLBACK_DEFAULTS: {
+  baseURL: string
+  model: string
+  apiVersion: string
+  maxTokens: number
+  maxUses: number
+}
+
+/** Transport/provider failure code the plugin reports. */
+export declare const WEB_PROVIDER_ERROR: 'WEB_PROVIDER_ERROR'
+
+/** Build the seam error for a provider or transport failure. */
+export declare function webError(message: string): Error
+
+/**
+ * Build the official backend the switch router delegates to. The optional
+ * `@deepseek-ai/dsh-web-search-deepseek` peer loads on demand; when it cannot
+ * be loaded, `available()` is false and a direct search rejects descriptively.
+ */
+export declare function createDeepSeekBackend(ctx: unknown): {
+  available(): boolean
+  search(request: unknown, signal?: AbortSignal): Promise<unknown>
+}
+
 /** Schemastery config schema (validated by the DSH loader). */
 export declare const Config: unknown
 

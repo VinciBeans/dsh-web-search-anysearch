@@ -9,9 +9,30 @@
  * @module @wenqi_bian/dsh-web-search-anysearch/provider
  */
 
-import { WebError } from '@deepseek-ai/dsh-web'
 import type { WebSearchProvider, WebSearchRequest, WebSearchResult } from '@deepseek-ai/dsh-web'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
+import { webError } from './errors.ts'
+
+/**
+ * Plugin version stamped on outbound requests, injected by the build from
+ * package.json (esbuild `define`). Single-sourced so the header cannot drift
+ * from the published version.
+ */
+declare const __DSH_WEB_SEARCH_ANYSEARCH_VERSION__: string
+
+/**
+ * The client-identification header value. Reading the injected constant through
+ * a guard keeps the module importable from raw source (tests, ts-node) where no
+ * build define exists.
+ * @returns `dsh-web-search-anysearch/<version>`.
+ */
+function clientTag(): string {
+  try {
+    return `dsh-web-search-anysearch/${__DSH_WEB_SEARCH_ANYSEARCH_VERSION__}`
+  } catch {
+    return 'dsh-web-search-anysearch/0.0.0-dev'
+  }
+}
 
 /** Stable id this provider registers under; select it with `web.searchProvider`. */
 export const ANYSEARCH_PROVIDER_ID = 'anysearch'
@@ -87,7 +108,7 @@ export class AnySearchProvider implements WebSearchProvider {
       ?? ''
     const headers: Record<string, string> = {
       'content-type': 'application/json',
-      'x-anysearch-client': 'dsh-web-search-anysearch/0.1.2-rc.1',
+      'x-anysearch-client': clientTag(),
     }
     if (apiKey !== '') headers.authorization = `Bearer ${apiKey}`
     const body: Record<string, unknown> = { query: request.query }
@@ -104,14 +125,14 @@ export class AnySearchProvider implements WebSearchProvider {
     } catch (error) {
       // Cancellation is the caller's abort, not a provider failure.
       if (error instanceof DOMException && error.name === 'AbortError') throw error
-      throw new WebError(`AnySearch request failed: ${String(error)}`, 'WEB_PROVIDER_ERROR')
+      throw webError(`AnySearch request failed: ${String(error)}`)
     }
 
     let envelope: AnySearchEnvelope
     try {
       envelope = await response.json() as AnySearchEnvelope
     } catch {
-      throw new WebError(`AnySearch returned a non-JSON response (HTTP ${response.status})`, 'WEB_PROVIDER_ERROR')
+      throw webError(`AnySearch returned a non-JSON response (HTTP ${response.status})`)
     }
     // The vendor CLI accepts an absent `code` as success; only a non-zero one fails.
     const code = typeof envelope.code === 'number' ? envelope.code : 0
@@ -122,7 +143,7 @@ export class AnySearchProvider implements WebSearchProvider {
       const message = typeof envelope.message === 'string' && envelope.message.length > 0
         ? envelope.message
         : `HTTP ${response.status}`
-      throw new WebError(`AnySearch error: ${message}${requestId}`, 'WEB_PROVIDER_ERROR')
+      throw webError(`AnySearch error: ${message}${requestId}`)
     }
 
     const results = Array.isArray(envelope.data?.results) ? envelope.data.results : []

@@ -82,7 +82,7 @@ DSH_WEB_SEARCH_PROVIDER=anysearch dsh web
 
 - **仅通用搜索。** dsh seam 请求只携带 `query` 与 `maxResults`；AnySearch 的垂直领域（`finance.quote` 等）、其必填 params、`zone`/`language` 以及 `/v1/extract` 端点无法经 `web_search` 触达。
 - 切换卡片需要 dsh web GUI 组合本插件（浏览器半部经 `dsh.client` 分发）；headless profile 下功能完整，但只能走配置文件切换。
-- 选中官方后端时，其可用性跟随内置 DeepSeek 搜索设置（需要 key 与合法端点）；AnySearch 始终支持匿名。
+- 选中官方后端时，其可用性跟随内置 DeepSeek 搜索设置（需要 key 与合法端点）；AnySearch 始终支持匿名。内置插件 `@deepseek-ai/dsh-web-search-deepseek` 是**可选 peer**，按需动态加载：未组合该插件的部署仍能加载本插件并使用 AnySearch，官方一侧报告不可用。
 - 搜索词会发送到 `https://api.anysearch.com`（可用 `ANYSEARCH_API_BASE_URL` 或卡片上的接口地址覆盖）；返回内容视为不可信外部数据。
 
 ## License

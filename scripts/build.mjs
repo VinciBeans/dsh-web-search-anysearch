@@ -23,6 +23,8 @@ await build({
   outfile: 'lib/index.js',
   sourcemap: true,
   external: ['@deepseek-ai/*'],
+  // Single-source the version stamped on outbound requests.
+  define: { __DSH_WEB_SEARCH_ANYSEARCH_VERSION__: JSON.stringify(pkg.version) },
 })
 
 await build({

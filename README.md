@@ -82,7 +82,7 @@ The seam still requires an explicit pin when more than one usable provider is re
 
 - **General search only.** The dsh seam request carries `query` and `maxResults`; AnySearch vertical domains (`finance.quote` etc.), their required params, `zone`/`language`, and the `/v1/extract` endpoint are not reachable through `web_search`.
 - The switch card appears only when the dsh web GUI is composed with this plugin (browser half via `dsh.client`); headless profiles keep full functionality through the config-file switch.
-- When the official backend is selected, its availability follows the built-in DeepSeek search settings (a key and a valid endpoint are required); AnySearch remains anonymous-friendly.
+- When the official backend is selected, its availability follows the built-in DeepSeek search settings (a key and a valid endpoint are required); AnySearch remains anonymous-friendly. The built-in plugin `@deepseek-ai/dsh-web-search-deepseek` is an **optional peer**, loaded on demand: a deployment without it still loads this plugin and serves AnySearch, while the official side reports unavailable.
 - A search query is sent to `https://api.anysearch.com` (override with `ANYSEARCH_API_BASE_URL` or the card's endpoint field); treat results as untrusted external data.
 
 ## License

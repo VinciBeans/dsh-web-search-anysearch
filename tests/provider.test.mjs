@@ -1,8 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { AnySearchProvider, Config, name } from '../lib/index.js'
 
 const BASE = 'https://api.anysearch.com'
+/** The published version the build stamps onto outbound requests. */
+const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 
 test('Config fills the apiKeyEnv default and keeps explicit values', () => {
   assert.equal(Config({}).apiKeyEnv, 'ANYSEARCH_API_KEY')
@@ -40,7 +43,7 @@ test('maps a success envelope to sources and applies the request bounds', async 
   assert.equal(calls[0].url, `${BASE}/v1/search`)
   assert.equal(calls[0].init.method, 'POST')
   assert.equal(calls[0].init.headers.authorization, 'Bearer k')
-  assert.equal(calls[0].init.headers['x-anysearch-client'], 'dsh-web-search-anysearch/0.1.2-rc.1')
+  assert.equal(calls[0].init.headers['x-anysearch-client'], `dsh-web-search-anysearch/${PLUGIN_VERSION}`)
   assert.deepEqual(JSON.parse(calls[0].init.body), { query: 'q', max_results: 10 }) // clamped
   assert.deepEqual(result.sources, [
     { url: 'https://a.example/1', title: 'T1', snippet: 'C1' }, // content wins over snippet
@@ -132,16 +135,19 @@ test('the switch provider routes to the section-named backend', async () => {
     return new Response(JSON.stringify(ONE_RESULT), { status: 200 })
   }
   let backend = 'anysearch'
+  // The router consumes the structural OfficialSearchBackend; the real class
+  // stands in for it here, exactly as createDeepSeekBackend wraps it.
+  const official = new DeepSeekSearchProvider(() => ({
+    baseURL: 'https://search.official.test/v1',
+    model: 'deepseek-v4-flash',
+    apiVersion: '2023-06-01',
+    maxTokens: 4096,
+    maxUses: 5,
+    resolveApiKey: async () => 'dsk',
+  }))
   const provider = new AnySearchSwitchProvider(
     new AnySearchProvider({ baseURL: BASE }),
-    new DeepSeekSearchProvider(() => ({
-      baseURL: 'https://search.official.test/v1',
-      model: 'deepseek-v4-flash',
-      apiVersion: '2023-06-01',
-      maxTokens: 4096,
-      maxUses: 5,
-      resolveApiKey: async () => 'dsk',
-    })),
+    { available: () => official.available(), search: (request, signal) => official.search(request, signal) },
     () => backend,
   )
   await provider.search({ query: 'q' })
@@ -256,4 +262,47 @@ test('installs through whichever section installer the dsh build provides', asyn
   } else {
     assert.equal(registeredNs, 'web-search-anysearch')
   }
+})
+
+test('guards the cross-plugin identifiers and default mirrors against the installed dsh', async () => {
+  const {
+    DEEPSEEK_FALLBACK_DEFAULTS,
+    DEEPSEEK_SEARCH_SETTINGS_NAMESPACE,
+    ANYSEARCH_BACKEND_ANYSEARCH,
+    ANYSEARCH_BACKEND_DEEPSEEK,
+    ANYSEARCH_PROVIDER_ID,
+  } = await import('../lib/index.js')
+  const deepseek = await import('@deepseek-ai/dsh-web-search-deepseek')
+
+  // The one settings namespace we read from another plugin.
+  assert.equal(DEEPSEEK_SEARCH_SETTINGS_NAMESPACE, deepseek.WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE)
+  // The local fallbacks must mirror the built-in provider's exported defaults,
+  // so a deployment without the package still projects the official endpoint.
+  assert.equal(DEEPSEEK_FALLBACK_DEFAULTS.baseURL, deepseek.DEEPSEEK_DEFAULT_BASE_URL)
+  assert.equal(DEEPSEEK_FALLBACK_DEFAULTS.model, deepseek.DEEPSEEK_DEFAULT_MODEL)
+  assert.equal(DEEPSEEK_FALLBACK_DEFAULTS.apiVersion, deepseek.DEEPSEEK_DEFAULT_API_VERSION)
+  assert.equal(DEEPSEEK_FALLBACK_DEFAULTS.maxTokens, deepseek.DEEPSEEK_DEFAULT_MAX_TOKENS)
+  assert.equal(DEEPSEEK_FALLBACK_DEFAULTS.maxUses, deepseek.DEEPSEEK_DEFAULT_MAX_USES)
+  // The seam selection contract: our id and the two backend values.
+  assert.equal(ANYSEARCH_PROVIDER_ID, 'anysearch')
+  assert.equal(ANYSEARCH_BACKEND_ANYSEARCH, 'anysearch')
+  assert.equal(ANYSEARCH_BACKEND_DEEPSEEK, deepseek.DEEPSEEK_PROVIDER_ID)
+})
+
+test('an unavailable official backend never takes AnySearch down with it', async () => {
+  const { AnySearchSwitchProvider, AnySearchProvider: AnySearch, webError } = await import('../lib/index.js')
+  let backend = 'deepseek-official'
+  // What createDeepSeekBackend degenerates to when the optional peer cannot be
+  // loaded: availability false, and a descriptive error on a direct search.
+  const official = {
+    available: () => false,
+    search: async () => { throw webError('official DeepSeek search backend is unavailable: package missing') },
+  }
+  const provider = new AnySearchSwitchProvider(new AnySearch({ baseURL: BASE }), official, () => backend)
+  assert.equal(provider.available(), false)
+  await assert.rejects(provider.search({ query: 'q' }), /backend is unavailable/)
+  backend = 'anysearch'
+  globalThis.fetch = async () => new Response(JSON.stringify({ code: 0, data: { results: [] } }), { status: 200 })
+  assert.equal(provider.available(), true)
+  assert.deepEqual((await provider.search({ query: 'q' })).sources, [])
 })

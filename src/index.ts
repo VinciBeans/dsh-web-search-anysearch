@@ -14,7 +14,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-web'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
+import { readCredential, readEnv } from './env.ts'
 import {
   AnySearchProvider,
   ANYSEARCH_DEFAULT_API_KEY_ENV,
@@ -27,7 +27,7 @@ import {
   ANYSEARCH_BACKEND_ANYSEARCH,
 } from './router.ts'
 import type { SearchBackend } from './router.ts'
-import { createDeepSeekProvider } from './official.ts'
+import { createDeepSeekBackend } from './official.ts'
 import { installSection } from './section.ts'
 
 export {
@@ -43,7 +43,12 @@ export {
   ANYSEARCH_BACKEND_DEEPSEEK,
 } from './router.ts'
 export type { SearchBackend } from './router.ts'
-export { createDeepSeekProvider, DEEPSEEK_SEARCH_SETTINGS_NAMESPACE } from './official.ts'
+export {
+  createDeepSeekBackend,
+  DEEPSEEK_FALLBACK_DEFAULTS,
+  DEEPSEEK_SEARCH_SETTINGS_NAMESPACE,
+} from './official.ts'
+export { WEB_PROVIDER_ERROR, webError } from './errors.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'web-search-anysearch'
@@ -96,17 +101,9 @@ function resolveAnySearchOptions(ctx: Context, config: Config): AnySearchProvide
   const apiKeyEnv = credentialRef(config.apiKeyEnv ?? ANYSEARCH_DEFAULT_API_KEY_ENV)
   return {
     ...config.apiKey !== undefined && config.apiKey.length > 0 ? { apiKey: config.apiKey } : {},
-    resolveApiKey: async () => {
-      const credentials = ctx.get('credentials')
-      if (credentials !== undefined) return (await credentials.resolve(apiKeyEnv))?.value
-      // Without the seam the environment is the whole credential plane.
-      const ambient = launchEnvironmentOf(ctx).get(apiKeyEnv)
-      return ambient !== undefined && ambient.value.length > 0 ? ambient.value : undefined
-    },
+    resolveApiKey: () => readCredential(ctx, apiKeyEnv),
     apiKeyEnv,
-    baseURL: config.baseURL
-      ?? launchEnvironmentOf(ctx).get(BASE_URL_ENV)?.value
-      ?? ANYSEARCH_DEFAULT_BASE_URL,
+    baseURL: config.baseURL ?? readEnv(ctx, BASE_URL_ENV) ?? ANYSEARCH_DEFAULT_BASE_URL,
   }
 }
 
@@ -129,7 +126,7 @@ export function apply(ctx: Context, config: Config): void {
   })
   ctx.web.registerSearchProvider(new AnySearchSwitchProvider(
     new AnySearchProvider(() => resolveAnySearchOptions(ctx, current())),
-    createDeepSeekProvider(ctx),
+    createDeepSeekBackend(ctx),
     () => currentBackend(current()),
   ))
 }

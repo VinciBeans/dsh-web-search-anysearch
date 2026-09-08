@@ -4,6 +4,25 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **The official DeepSeek provider is now an optional, lazily loaded peer.**
+  `@deepseek-ai/dsh-web-search-deepseek` moved from a static import to a
+  dynamic import on first use, and its `peerDependenciesMeta.optional` flag is
+  set. A deployment without the built-in plugin keeps loading this one and
+  serving AnySearch; the official side reports unavailable and a direct search
+  fails with a descriptive error. The fallback defaults mirror the package's
+  exported constants, and a guard test asserts they match.
+- **Environment and credential access is now one module** (`src/env.ts`), shared
+  by the AnySearch and official projections, and `WebError` construction is one
+  factory (`src/errors.ts`).
+- **The `x-anysearch-client` version is injected at build time** from
+  `package.json` instead of being hardcoded, so the header cannot drift from
+  the published version.
+- **Guard tests** assert the cross-plugin settings namespace, the default
+  mirrors, the provider/backend ids and the client bundle's registration
+  contract against the installed dsh on every matrix leg.
+
 ### Verified
 
 - **dsh v0.1.3-alpha.2** (pin `82a5fd61a7`). No code change was needed: a
