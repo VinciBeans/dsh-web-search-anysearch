@@ -16,18 +16,18 @@ Requires a DSH install whose `web` profile has been initialized (start the Web G
 
 ### From npm
 
-1. **npm `latest`** (`0.1.2-rc.1`, kept in sync with `rc`) — compatible with dsh v0.1.2-alpha.1 ~ rc.1:
+1. **npm `latest`** (`0.1.3-alpha.2`, kept in sync with `alpha`) — compatible with dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2:
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
-   # equivalent: dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@rc
+   # equivalent: dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
    ```
 
 The npm package ships the prebuilt host and client bundles, so no build step is needed on install.
 
 ### From source
 
-The source version — `0.1.2-rc.1`, what the GitHub Release `v0.1.2-rc.1` ships — is for local development:
+The source version — `0.1.3-alpha.2`, what the GitHub Release `v0.1.3-alpha.2` ships — is for local development:
 
 ```bash
 dsh plugin --profile web add .

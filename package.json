@@ -1,6 +1,6 @@
 {
   "name": "@wenqi_bian/dsh-web-search-anysearch",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.3-alpha.2",
   "description": "AnySearch-backed WebSearchProvider for DeepSeek Harness (dsh): register AnySearch's /v1/search, switch explicitly between the official DeepSeek search endpoint and AnySearch from the Plugins settings page card, compatible with dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2 (see README).",
   "keywords": [
     "dsh",
@@ -69,11 +69,11 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-credentials": "^0.1.2-alpha.1",
-    "@deepseek-ai/dsh-launch-environment": "^0.1.2-alpha.1",
-    "@deepseek-ai/dsh-settings": "^0.1.2-alpha.1",
-    "@deepseek-ai/dsh-web": "^0.1.2-alpha.1",
-    "@deepseek-ai/dsh-web-search-deepseek": "^0.1.2-alpha.1"
+    "@deepseek-ai/dsh-credentials": "^0.1.2-alpha.1 || ^0.1.3-alpha.1",
+    "@deepseek-ai/dsh-launch-environment": "^0.1.2-alpha.1 || ^0.1.3-alpha.1",
+    "@deepseek-ai/dsh-settings": "^0.1.2-alpha.1 || ^0.1.3-alpha.1",
+    "@deepseek-ai/dsh-web": "^0.1.2-alpha.1 || ^0.1.3-alpha.1",
+    "@deepseek-ai/dsh-web-search-deepseek": "^0.1.2-alpha.1 || ^0.1.3-alpha.1"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-web-search-deepseek": {

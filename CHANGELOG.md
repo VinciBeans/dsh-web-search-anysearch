@@ -2,10 +2,18 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.1.3-alpha.2] - 2026-09-04
+
+Version aligned with the harness release this build is verified against
+(`dsh-v0.1.3-alpha.2`, pin `82a5fd61a7`), following the sibling plugins'
+convention of naming each release after the dsh tag it targets.
 
 ### Changed
 
+- **Peer ranges cover the 0.1.3 line.** `^0.1.2-alpha.1` does not satisfy
+  `0.1.3-alpha.2` under npm's prerelease semantics, so every `@deepseek-ai/dsh-*`
+  peer now reads `^0.1.2-alpha.1 || ^0.1.3-alpha.1` (the `@deepseek-ai/cordis`
+  peer stays `^4.0.1`, satisfied by the vendored `4.0.2`).
 - **The official DeepSeek provider is now an optional, lazily loaded peer.**
   `@deepseek-ai/dsh-web-search-deepseek` moved from a static import to a
   dynamic import on first use, and its `peerDependenciesMeta.optional` flag is
@@ -35,7 +43,7 @@ All notable changes to this project are documented here.
   `@deepseek-ai/dsh-package-manifest`, and the built-in cards switched their
   badges to the `Tag` primitive). The base bundle still pins
   `web.searchProvider: deepseek-official`, so the bundle-patch override applies
-  as before. CI now runs the full matrix — v0.1.2-alpha.1 ~ alpha.5, rc.1 and
+  as before. CI runs the full matrix — v0.1.2-alpha.1 ~ alpha.5, rc.1 and
   v0.1.3-alpha.2 — green.
 
 ## [0.1.2-rc.1] - 2026-09-04
@@ -80,4 +88,5 @@ it is verified against (v0.1.2-alpha.1 ~ rc.1).
 - Build now emits both the host bundle (`lib/index.js`) and the client bundle
   (`lib/client.js`); `exports["./client"]` added.
 
+[0.1.3-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.3-alpha.2
 [0.1.2-rc.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.2-rc.1
