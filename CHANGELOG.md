@@ -2,7 +2,11 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.1.5-alpha.1] - 2026-09-09
+
+Version aligned with the harness release this build is verified against
+(`dsh-v0.1.5-alpha.1`, pin `5dda764ed3`), following the sibling plugins'
+convention of naming each release after the dsh tag it targets.
 
 ### Verified
 
@@ -120,5 +124,6 @@ it is verified against (v0.1.2-alpha.1 ~ rc.1).
 - Build now emits both the host bundle (`lib/index.js`) and the client bundle
   (`lib/client.js`); `exports["./client"]` added.
 
+[0.1.5-alpha.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.5-alpha.1
 [0.1.3-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.3-alpha.2
 [0.1.2-rc.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.2-rc.1

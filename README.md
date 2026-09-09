@@ -6,7 +6,7 @@ dsh exposes one model-facing `web_search` tool and picks the real backend throug
 
 ## Compatibility
 
-Tested against dsh v0.1.2-alpha.1 ~ alpha.5, v0.1.2-rc.1, v0.1.3-alpha.2 and v0.1.5-alpha.1 (the contract surface this plugin consumes is identical across the eight tags; the CI matrix verifies each one). The published `alpha` build (`0.1.3-alpha.2`) already runs on v0.1.5-alpha.1 — the consumed contract did not change — and the next release widens its declared peer ranges to cover the 0.1.5 line.
+Tested against dsh v0.1.2-alpha.1 ~ alpha.5, v0.1.2-rc.1, v0.1.3-alpha.2 and v0.1.5-alpha.1 (the contract surface this plugin consumes is identical across the eight tags; the CI matrix verifies each one). The `0.1.5-alpha.1` release widens its declared peer ranges to cover the 0.1.5 line; the npm `alpha` build (`0.1.3-alpha.2`) already runs on v0.1.5-alpha.1, because the consumed contract did not change.
 
 ### Support policy
 
@@ -22,7 +22,7 @@ Requires a DSH install whose `web` profile has been initialized (start the Web G
 
 Pick the dist-tag that matches your harness:
 
-1. **npm `alpha`** (`0.1.3-alpha.2`) — the current release; compatible with dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2 (0.1.2 support is legacy, see above):
+1. **npm `alpha`** (`0.1.3-alpha.2`) — the current npm build; compatible with dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2 (0.1.2 support is legacy, see above):
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
@@ -38,7 +38,7 @@ The npm package ships the prebuilt host and client bundles, so no build step is 
 
 ### From source
 
-The source version — `0.1.3-alpha.2`, what the GitHub Release `v0.1.3-alpha.2` ships — is for local development:
+The source version — `0.1.5-alpha.1`, what the GitHub Release `v0.1.5-alpha.1` ships — is for local development:
 
 ```bash
 dsh plugin --profile web add .

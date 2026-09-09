@@ -6,7 +6,7 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 ## 兼容性
 
-针对 dsh v0.1.2-alpha.1 ~ alpha.5、v0.1.2-rc.1、v0.1.3-alpha.2 与 v0.1.5-alpha.1 八个 tag 验证（本插件消费的契约面在八个版本上一致；CI 矩阵逐个验证）。已发布的 `alpha` 构建（`0.1.3-alpha.2`）在 v0.1.5-alpha.1 上同样可用——消费的契约未变；下一版本会把声明式 peer 范围扩展到 0.1.5 线。
+针对 dsh v0.1.2-alpha.1 ~ alpha.5、v0.1.2-rc.1、v0.1.3-alpha.2 与 v0.1.5-alpha.1 八个 tag 验证（本插件消费的契约面在八个版本上一致；CI 矩阵逐个验证）。`0.1.5-alpha.1` 版本已把声明式 peer 范围扩展到 0.1.5 线；npm `alpha` 构建（`0.1.3-alpha.2`）在 v0.1.5-alpha.1 上同样可用——消费的契约未变。
 
 ### 支持策略
 
@@ -22,7 +22,7 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 按你的宿主版本选择 dist-tag：
 
-1. **npm `alpha`**（`0.1.3-alpha.2`）——当前版本；兼容 dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2（其中 0.1.2 支持为遗留状态，见上）：
+1. **npm `alpha`**（`0.1.3-alpha.2`）——当前 npm 构建；兼容 dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2（其中 0.1.2 支持为遗留状态，见上）：
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
@@ -38,7 +38,7 @@ npm 包内附预构建的宿主与浏览器 bundle，安装无需构建步骤。
 
 ### 从源码安装
 
-源码版本 `0.1.3-alpha.2`（即 GitHub Release `v0.1.3-alpha.2` 发布的内容），用于本地开发：
+源码版本 `0.1.5-alpha.1`（即 GitHub Release `v0.1.5-alpha.1` 发布的内容），用于本地开发：
 
 ```bash
 dsh plugin --profile web add .
