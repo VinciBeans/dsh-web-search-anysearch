@@ -25,6 +25,15 @@ All notable changes to this project are documented here.
   `@deepseek-ai/dsh-*` peer now reads
   `^0.1.2-alpha.1 || ^0.1.3-alpha.1 || ^0.1.5-alpha.1`.
 
+### Deprecated
+
+- **The dsh 0.1.2 line (`v0.1.2-alpha.1` ~ `v0.1.2-rc.1`) is legacy.** The code
+  still supports it — the alpha-era settings installer shape, the `^0.1.2-alpha.1`
+  peer ranges and the CI matrix legs all stay — but subsequent releases drop
+  0.1.2 support: if a future dsh version breaks a consumed contract on that
+  line, this plugin will not be adapted for 0.1.2 again, and the published
+  0.1.2 releases stay frozen. Both READMEs state the policy.
+
 ## [0.1.3-alpha.2] - 2026-09-04
 
 Version aligned with the harness release this build is verified against

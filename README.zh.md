@@ -8,6 +8,10 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 针对 dsh v0.1.2-alpha.1 ~ alpha.5、v0.1.2-rc.1、v0.1.3-alpha.2 与 v0.1.5-alpha.1 八个 tag 验证（本插件消费的契约面在八个版本上一致；CI 矩阵逐个验证）。已发布的 `alpha` 构建（`0.1.3-alpha.2`）在 v0.1.5-alpha.1 上同样可用——消费的契约未变；下一版本会把声明式 peer 范围扩展到 0.1.5 线。
 
+### 支持策略
+
+**0.1.2 线（`v0.1.2-alpha.1` ~ `v0.1.2-rc.1`）已进入遗留（legacy）状态。** 当前代码仍然兼容该线，CI 矩阵也仍在验证这些 tag，但支持到此为止：**后续版本将放弃对 0.1.2 的支持。** 若上游 dsh 后续版本改动了本插件消费的契约、导致 0.1.2 线不可用，本插件不再为 0.1.2 做适配——已发布的 0.1.2 版本保持冻结，不再更新。若你的宿主仍停留在该线，请固定使用 `0.1.2-rc.1`（npm `latest`）或 `0.1.3-alpha.2`（npm `alpha`）。
+
 ## 安装
 
 版本与宿主对齐：每个版本针对、并命名为对应的 `@deepseek-ai/dsh` 发布。
@@ -18,13 +22,13 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 按你的宿主版本选择 dist-tag：
 
-1. **npm `alpha`**（`0.1.3-alpha.2`）——兼容 dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2：
+1. **npm `alpha`**（`0.1.3-alpha.2`）——当前版本；兼容 dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2（其中 0.1.2 支持为遗留状态，见上）：
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
    ```
 
-2. **npm `latest`**（`0.1.2-rc.1`）——上一代版本，兼容 dsh v0.1.2-alpha.1 ~ rc.1：
+2. **npm `latest`**（`0.1.2-rc.1`）——遗留的 0.1.2 线，已冻结；兼容 dsh v0.1.2-alpha.1 ~ rc.1：
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch

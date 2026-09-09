@@ -8,6 +8,10 @@ dsh exposes one model-facing `web_search` tool and picks the real backend throug
 
 Tested against dsh v0.1.2-alpha.1 ~ alpha.5, v0.1.2-rc.1, v0.1.3-alpha.2 and v0.1.5-alpha.1 (the contract surface this plugin consumes is identical across the eight tags; the CI matrix verifies each one). The published `alpha` build (`0.1.3-alpha.2`) already runs on v0.1.5-alpha.1 — the consumed contract did not change — and the next release widens its declared peer ranges to cover the 0.1.5 line.
 
+### Support policy
+
+The **0.1.2 line (`v0.1.2-alpha.1` ~ `v0.1.2-rc.1`) is legacy.** This code still supports it and the CI matrix still verifies those tags, but that support ends here: **subsequent releases drop the 0.1.2 line.** If a later dsh version changes a consumed contract in a way that breaks 0.1.2, this plugin will not be adapted for 0.1.2 again — the published 0.1.2 releases stay frozen as they are. If your harness is pinned to that line, stay on `0.1.2-rc.1` (npm `latest`) or `0.1.3-alpha.2` (npm `alpha`).
+
 ## Install
 
 Releases are version-aligned with the harness: each version is built for, and named after, the matching `@deepseek-ai/dsh` release.
@@ -18,13 +22,13 @@ Requires a DSH install whose `web` profile has been initialized (start the Web G
 
 Pick the dist-tag that matches your harness:
 
-1. **npm `alpha`** (`0.1.3-alpha.2`) — compatible with dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2:
+1. **npm `alpha`** (`0.1.3-alpha.2`) — the current release; compatible with dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2 (0.1.2 support is legacy, see above):
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
    ```
 
-2. **npm `latest`** (`0.1.2-rc.1`) — the previous generation, compatible with dsh v0.1.2-alpha.1 ~ rc.1:
+2. **npm `latest`** (`0.1.2-rc.1`) — the legacy 0.1.2 line, frozen; compatible with dsh v0.1.2-alpha.1 ~ rc.1:
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch

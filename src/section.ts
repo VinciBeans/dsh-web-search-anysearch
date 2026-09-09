@@ -8,7 +8,9 @@
  * section's base layer and hand back the resolved scope through `setSource`,
  * so the provider keeps reading the same plugin config section with or without
  * the GUI. This wrapper feature-detects the two shapes so one plugin source
- * serves the whole supported range.
+ * serves the whole supported range. The alpha-era shape exists only for the
+ * legacy dsh 0.1.2 line, which later releases drop (see the README support
+ * policy), so the module-export branch can be removed with that line.
  * @module @wenqi_bian/dsh-web-search-anysearch/section
  */
 
