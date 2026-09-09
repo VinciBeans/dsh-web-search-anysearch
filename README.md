@@ -6,7 +6,7 @@ dsh exposes one model-facing `web_search` tool and picks the real backend throug
 
 ## Compatibility
 
-Tested against dsh v0.1.2-alpha.1 ~ alpha.5, v0.1.2-rc.1 and v0.1.3-alpha.2 (the contract surface this plugin consumes is identical across the seven tags; the CI matrix verifies each one).
+Tested against dsh v0.1.2-alpha.1 ~ alpha.5, v0.1.2-rc.1, v0.1.3-alpha.2 and v0.1.5-alpha.1 (the contract surface this plugin consumes is identical across the eight tags; the CI matrix verifies each one). The published `alpha` build (`0.1.3-alpha.2`) already runs on v0.1.5-alpha.1 — the consumed contract did not change — and the next release widens its declared peer ranges to cover the 0.1.5 line.
 
 ## Install
 

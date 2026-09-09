@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Verified
+
+- **dsh v0.1.5-alpha.1** (pin `5dda764ed3`). A contract-surface review of
+  v0.1.3-alpha.2 → v0.1.5-alpha.1 found every consumed piece unchanged or
+  additively extended: the `ctx.web` seam, settings `installSection`,
+  credentials, `launchEnvironmentOf`, the DeepSeek search provider,
+  `settings.plugin.item`, `settingsScope`, locale and the `dsh.client`
+  boot/manifest contract are untouched; the client module table gained
+  `@deepseek-ai/dsh-client-ui-dockkit`, `ui-slots` gained an unrelated
+  `ResourceProtocolMap` interface, and the client-modules service made its
+  `webServer` inject optional (shell-carrier refactor). No code change was
+  needed; typecheck, build and all tests pass locally against a 0.1.5-era
+  harness, and CI adds the tag to the matrix.
+
+### Changed
+
+- **Peer ranges cover the 0.1.5 line.** `^0.1.2-alpha.1 || ^0.1.3-alpha.1` does
+  not satisfy `0.1.5-alpha.1` under npm's prerelease semantics, so every
+  `@deepseek-ai/dsh-*` peer now reads
+  `^0.1.2-alpha.1 || ^0.1.3-alpha.1 || ^0.1.5-alpha.1`.
+
 ## [0.1.3-alpha.2] - 2026-09-04
 
 Version aligned with the harness release this build is verified against
