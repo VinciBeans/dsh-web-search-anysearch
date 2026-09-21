@@ -2,6 +2,61 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.6-alpha.2] - 2026-09-18
+
+Version aligned with the harness release this build is verified against
+(`dsh-v0.1.6-alpha.2`, pin `ddefc45fbc`), following the sibling plugins'
+convention of naming each release after the dsh tag it targets.
+
+### Fixed
+
+- **The GUI card registers again on dsh v0.1.6-alpha.2 — and it was failing
+  silently.** That release rebuilt the Plugins page: `ui-settings-plugins`
+  deleted `ConfigurablePluginsTab.tsx`, the only declarer of the
+  `settings.plugin.item` slot, and moved per-plugin configuration to the new
+  `@deepseek-ai/dsh-client-ui-plugin-manager` page, which dispatches a bundle's
+  own configuration through `plugins.bundle.config` (keyed by the bundle's
+  package name) and a bundle row's through `plugins.row.config` (keyed
+  `<package>#<rowId>`). Because `slots.inject` runs its callback only once the
+  slot is declared, the card simply never mounted — no error, no log line. The
+  browser half now registers into `plugins.bundle.config` keyed by
+  `@wenqi_bian/dsh-web-search-anysearch`, **and** keeps the
+  `settings.plugin.item` registration: a slot the deployment does not declare is
+  never injected, so one build serves both page generations.
+- **The card renders the view the page asks for, and owns its own save
+  control.** The 0.1.6 page passes `{ view: 'summary' | 'page' }`: `summary` is
+  the one-liner beside the title, and `page` is the configuration body. The page
+  mounts an entry as a bare `<section data-plugin-config>`, and the form chrome
+  that wraps the *shipped* cards (`PluginConfigForm`) is internal to
+  `@deepseek-ai/dsh-client-ui-settings-plugins`, which is not a module-table
+  seed — so a third-party entry has to render its own read-only notice, failure
+  line and save button, and to drop its staged edits on unmount (the page offers
+  no discard gesture). It does. The pre-0.1.6 card, which declares no view, keeps
+  its disclosure chrome and its save/discard footer.
+
+### Changed
+
+- **Peer ranges cover the 0.1.6 line.** `^0.1.5-alpha.1` does not satisfy
+  `0.1.6-alpha.2` under npm's prerelease semantics, so every `@deepseek-ai/dsh-*`
+  peer now reads `^0.1.2-alpha.1 || ^0.1.3-alpha.1 || ^0.1.5-alpha.1 || ^0.1.6-alpha.2`.
+- **The bundle's package name is now a named constant** (`ANYSEARCH_PACKAGE_NAME`)
+  because `plugins.bundle.config` dispatches by it: it must keep matching the
+  `dsh.profile.bundles` entry the install writes.
+
+### Verified
+
+- **dsh v0.1.6-alpha.2** (pin `ddefc45fbc`). A contract-surface review of
+  v0.1.5-alpha.1 → v0.1.6-alpha.2 found the **host half untouched**: `ctx.web`
+  and its provider contract changed by a package.json version bump only; so did
+  credentials, settings, `launch-environment`, and the DeepSeek search provider
+  (only its endpoint doc comments changed); `settings.installSection`,
+  `settingsScope.bind`/`getSnapshot`/`subscribe`/`set`/`unset`,
+  `credentials/reference-updated`, `ui-slots`' register/inject/getVersion/subscribe
+  and the `dsh.client` `__ModuleLoader__.load({id, factory})` boot contract are
+  unchanged. The client **page** contract is the one that moved, as above.
+  `typecheck`, `build` and all 21 tests pass against the 0.1.6-alpha.2 artifacts,
+  and CI adds the tag to the matrix.
+
 ## [0.1.5-alpha.1] - 2026-09-09
 
 Version aligned with the harness release this build is verified against
@@ -124,6 +179,7 @@ it is verified against (v0.1.2-alpha.1 ~ rc.1).
 - Build now emits both the host bundle (`lib/index.js`) and the client bundle
   (`lib/client.js`); `exports["./client"]` added.
 
+[0.1.6-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.6-alpha.2
 [0.1.5-alpha.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.5-alpha.1
 [0.1.3-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.3-alpha.2
 [0.1.2-rc.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.2-rc.1

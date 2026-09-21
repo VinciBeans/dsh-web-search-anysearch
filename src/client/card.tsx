@@ -1,14 +1,22 @@
 /**
- * The AnySearch switch card on the Plugins page: its backend switch, the
- * AnySearch endpoint, and the AnySearch key — written through the credentials
- * domain, never into the settings section, so the literal never rides a
- * response.
+ * The AnySearch configuration form: its backend switch, the AnySearch
+ * endpoint, and the AnySearch key — written through the credentials domain,
+ * never into the settings section, so the literal never rides a response.
+ *
+ * One component serves two page generations. `view: 'page'` is the
+ * configuration body the 0.1.6-alpha.2 Plugins page mounts on this bundle's
+ * page: the host form owns the title, the read-only notice, and the save
+ * control, so this body renders only its controls. `view: 'summary'` is the
+ * one-liner the page places beside them. A page generation that declares no
+ * view at all is the pre-0.1.6 card, which this component then renders as a
+ * disclosure owning its own save and discard.
  * @module @wenqi_bian/dsh-web-search-anysearch/client/card
  */
 
 import * as React from 'react'
 import type { AnySearchCardState } from './controller.ts'
 import type { AnySearchLocaleKey } from './locales.ts'
+import type { PluginConfigViewProps } from './index.ts'
 import { classes as css } from './styles.ts'
 
 /** Props the renderer binds for the anysearch card. */
@@ -25,17 +33,84 @@ export interface AnySearchCardProps {
   save: () => void
   /** Drop every staged edit. */
   discard: () => void
+  /** Which view the page asks for; absent on the pre-0.1.6 card, which owns its own chrome. */
+  view?: PluginConfigViewProps['view']
 }
 
 /**
- * Render the AnySearch switch card.
- * @param props - locale copy, the card snapshot, and its form actions.
- * @returns the card.
+ * Render the AnySearch configuration.
+ * @param props - locale copy, the card snapshot, its form actions, and the view the page asked for.
+ * @returns the requested view.
  */
 export function AnySearchCard(props: AnySearchCardProps) {
+  const state = props.useAnysearchCard(snapshot => snapshot)
+  // Leaving the page drops every staged edit — the 0.1.6 page gives an entry no
+  // discard gesture, so unmount is the only point at which one can be offered.
+  // The ref keeps the effect at mount-only while still calling the live action.
+  const discard = React.useRef(props.discard)
+  discard.current = props.discard
+  React.useEffect(() => () => { discard.current() }, [])
+  if (props.view === 'summary') return <>{props.t('description')}</>
+  if (!state.available) return null
+  if (props.view === 'page') {
+    return (
+      <>
+        <CardBody {...props} state={state} disabled={!state.writable} />
+        <CardFooter {...props} state={state} />
+      </>
+    )
+  }
+  return <LegacyCard {...props} state={state} />
+}
+
+/** Props of the form's save control. */
+interface CardFooterProps extends AnySearchCardProps {
+  /** The card's current snapshot. */
+  state: AnySearchCardState
+}
+
+/**
+ * The form's save control and its failure line. The page view owns it because
+ * the 0.1.6 Plugins page mounts an entry as a bare section, and the official
+ * form chrome that wraps the shipped cards is internal to
+ * `@deepseek-ai/dsh-client-ui-settings-plugins` — not a module-table seed, and
+ * a cross-plugin value import is what the client bundle purity gate forbids.
+ * @param props - the card's form actions and snapshot.
+ * @returns the footer.
+ */
+function CardFooter(props: CardFooterProps) {
+  const { state } = props
+  return (
+    <div className={css.footer}>
+      {state.failed ? <p className={css.failed} role="status">{props.t('saveFailed')}</p> : null}
+      <button
+        type="button"
+        className={css.save}
+        disabled={!state.dirty || state.invalid || state.saving}
+        onClick={props.save}
+      >
+        {props.t(state.saving ? 'saving' : 'save')}
+      </button>
+    </div>
+  )
+}
+
+/** Props of the pre-0.1.6 disclosure card. */
+interface LegacyCardProps extends AnySearchCardProps {
+  /** The card's current snapshot. */
+  state: AnySearchCardState
+}
+
+/**
+ * The pre-0.1.6 Plugins page card: a list item that discloses the same body and
+ * carries its own save and discard controls.
+ * @param props - locale copy, the card snapshot, and its form actions.
+ * @returns the disclosure list item.
+ */
+function LegacyCard(props: LegacyCardProps) {
+  const { state } = props
   const [open, setOpen] = React.useState(false)
   const saveStarted = React.useRef(false)
-  const state = props.useAnysearchCard(snapshot => snapshot)
   // Collapse only after Host-confirmed settlement; a rejected write keeps its
   // diagnostics and retained drafts visible (same rule as the shipped cards).
   React.useEffect(() => {
@@ -48,8 +123,6 @@ export function AnySearchCard(props: AnySearchCardProps) {
     if (!state.dirty && !state.failed) setOpen(false)
   }, [state.dirty, state.failed, state.saving])
   if (!state.available) return null
-  const disabled = !state.writable
-  const blocked = !state.dirty || state.invalid || state.saving
   return (
     <li className={open ? `${css.card} ${css.cardOpen}` : css.card}>
       <button
@@ -70,53 +143,7 @@ export function AnySearchCard(props: AnySearchCardProps) {
         ? (
           <div className={css.body}>
             {!state.writable ? <p className={css.readOnly} role="status">{props.t('readOnly')}</p> : null}
-            <div className={css.field}>
-              <div className={css.head}>
-                <label className={css.label}>{props.t('backendLabel')}</label>
-              </div>
-              <div className={css.backend} role="radiogroup" aria-label={props.t('backendLabel')}>
-                <BackendOption
-                  id="dswa-backend-anysearch"
-                  label={props.t('backendAnysearch')}
-                  value="anysearch"
-                  draft={state.backend.text}
-                  disabled={disabled}
-                  onPick={(value) => { props.edit('searchProvider', value) }}
-                />
-                <BackendOption
-                  id="dswa-backend-deepseek"
-                  label={props.t('backendDeepseek')}
-                  value="deepseek-official"
-                  draft={state.backend.text}
-                  disabled={disabled}
-                  onPick={(value) => { props.edit('searchProvider', value) }}
-                />
-              </div>
-              <p className={css.hint}>{props.t('backendHint')}</p>
-            </div>
-            <SecretField
-              id="dswa-anysearch-key"
-              label={props.t('apiKey')}
-              hint={props.t('apiKeyHint')}
-              disabled={!state.apiKeyWritable}
-              text={state.apiKey.text}
-              configured={state.apiKeyConfigured}
-              stateLabel={state.apiKeyConfigured ? props.t('apiKeySet') : props.t('apiKeyUnset')}
-              onEdit={(text) => { props.edit('apiKey', text) }}
-            />
-            <ValueField
-              id="dswa-anysearch-endpoint"
-              label={props.t('endpoint')}
-              hint={props.t('endpointHint')}
-              overriddenLabel={props.t('overridden')}
-              resetLabel={props.t('reset')}
-              disabled={disabled}
-              text={state.baseURL.text}
-              overridden={state.baseURL.overridden}
-              invalid={false}
-              onEdit={(text) => { props.edit('baseURL', text) }}
-              onReset={() => { props.resetField('baseURL') }}
-            />
+            <CardBody {...props} disabled={!state.writable} />
             <div className={css.footer}>
               {state.failed ? <p className={css.failed} role="status">{props.t('saveFailed')}</p> : null}
               <button
@@ -130,7 +157,7 @@ export function AnySearchCard(props: AnySearchCardProps) {
               <button
                 type="button"
                 className={css.save}
-                disabled={blocked}
+                disabled={!state.dirty || state.invalid || state.saving}
                 onClick={props.save}
               >
                 {props.t(state.saving ? 'saving' : 'save')}
@@ -140,6 +167,75 @@ export function AnySearchCard(props: AnySearchCardProps) {
         )
         : null}
     </li>
+  )
+}
+
+/** Props of the configuration controls. */
+interface CardBodyProps extends AnySearchCardProps {
+  /** The card's current snapshot. */
+  state: AnySearchCardState
+  /** Whether the Host settings document accepts writes. */
+  disabled: boolean
+}
+
+/**
+ * The configuration controls themselves, without any page chrome: the backend
+ * switch, the endpoint, and the write-only API key.
+ * @param props - locale copy, the card's form actions, and the field state.
+ * @returns the card's fields.
+ */
+function CardBody(props: CardBodyProps) {
+  const { state, disabled } = props
+  return (
+    <>
+      <div className={css.field}>
+        <div className={css.head}>
+          <label className={css.label}>{props.t('backendLabel')}</label>
+        </div>
+        <div className={css.backend} role="radiogroup" aria-label={props.t('backendLabel')}>
+          <BackendOption
+            id="dswa-backend-anysearch"
+            label={props.t('backendAnysearch')}
+            value="anysearch"
+            draft={state.backend.text}
+            disabled={disabled}
+            onPick={(value) => { props.edit('searchProvider', value) }}
+          />
+          <BackendOption
+            id="dswa-backend-deepseek"
+            label={props.t('backendDeepseek')}
+            value="deepseek-official"
+            draft={state.backend.text}
+            disabled={disabled}
+            onPick={(value) => { props.edit('searchProvider', value) }}
+          />
+        </div>
+        <p className={css.hint}>{props.t('backendHint')}</p>
+      </div>
+      <SecretField
+        id="dswa-anysearch-key"
+        label={props.t('apiKey')}
+        hint={props.t('apiKeyHint')}
+        disabled={!state.apiKeyWritable}
+        text={state.apiKey.text}
+        configured={state.apiKeyConfigured}
+        stateLabel={state.apiKeyConfigured ? props.t('apiKeySet') : props.t('apiKeyUnset')}
+        onEdit={(text) => { props.edit('apiKey', text) }}
+      />
+      <ValueField
+        id="dswa-anysearch-endpoint"
+        label={props.t('endpoint')}
+        hint={props.t('endpointHint')}
+        overriddenLabel={props.t('overridden')}
+        resetLabel={props.t('reset')}
+        disabled={disabled}
+        text={state.baseURL.text}
+        overridden={state.baseURL.overridden}
+        invalid={false}
+        onEdit={(text) => { props.edit('baseURL', text) }}
+        onReset={() => { props.resetField('baseURL') }}
+      />
+    </>
   )
 }
 

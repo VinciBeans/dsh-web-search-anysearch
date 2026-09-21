@@ -1,12 +1,17 @@
 /**
- * AnySearch switch card, browser half. The bundle ships through
- * `exports["./client"]` (declared by package.json `dsh.client`), so a dsh web
- * GUI composed with this plugin loads the card and registers it into the
- * Plugins page's `settings.plugin.item` slot under this plugin's namespace.
+ * AnySearch configuration surface on the Plugins page, browser half. The
+ * bundle ships through `exports["./client"]` (declared by package.json
+ * `dsh.client`), so a dsh web GUI composed with this plugin loads this half and
+ * registers the configuration the page renders on this bundle's own page.
  *
- * The card edits the `web-search-anysearch` namespace the host half installs;
- * the ConfigurablePluginsTab pairs the served namespace with this card by key,
- * so nothing here knows about the cards the deployment ships.
+ * The card edits the `web-search-anysearch` namespace the host half installs.
+ * Which slot carries it depends on the dsh version, because the Plugins page
+ * was rebuilt in 0.1.6-alpha.2: the page used to pair a card with a settings
+ * namespace through the `settings.plugin.item` slot, and now dispatches a
+ * bundle's own configuration through `plugins.bundle.config`, keyed by the
+ * bundle's package name. Both declarations are merged here and both
+ * registrations are attempted — a slot no deployment declares never runs its
+ * callback — so one browser half serves the whole supported range.
  * @module @wenqi_bian/dsh-web-search-anysearch/client
  */
 
@@ -19,6 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import { AnySearchCard } from './card.tsx'
 import {
+  ANYSEARCH_PACKAGE_NAME,
   ANYSEARCH_SETTINGS_NS,
   AnySearchCardController,
 } from './controller.ts'
@@ -27,14 +33,32 @@ import { en, zh, LOCALE_NS } from './locales.ts'
 import type { AnySearchLocaleKey } from './locales.ts'
 import { injectCardStyles } from './styles.ts'
 
-/** Card dictionary namespace + the slot key this card claims (the settings ns it edits). */
+/**
+ * The view a Plugins-page configuration entry is asked for. Mirrors the
+ * `PluginConfigViewProps` the 0.1.6-alpha.2 page declares; declared locally so
+ * the browser half keeps zero value imports from the monorepo's client
+ * packages.
+ */
+export interface PluginConfigViewProps {
+  /** `summary` renders the entry's one-liner, `page` the bundle's configuration form. */
+  readonly view: 'summary' | 'page'
+}
+
+/** Slot key the pre-0.1.6 Plugins page declared for one plugin's card. */
+const LEGACY_ITEM_SLOT = 'settings.plugin.item'
+
+/** Slot key the 0.1.6-alpha.2 Plugins page declares for one bundle's own configuration. */
+const BUNDLE_CONFIG_SLOT = 'plugins.bundle.config'
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     'web-search-anysearch': AnySearchLocaleKey
   }
   interface SlotMap {
-    /** This plugin's card inside the Plugins page configuration tab, keyed by its settings namespace. */
+    /** This plugin's card on the pre-0.1.6 Plugins page, keyed by its settings namespace. */
     'settings.plugin.item': { kind: 'keyed'; scope: 'root'; owner: { children?: never } }
+    /** This bundle's configuration on the 0.1.6 Plugins page's own bundle page, keyed by package name. */
+    'plugins.bundle.config': { kind: 'keyed'; scope: 'root'; owner: PluginConfigViewProps }
   }
 }
 
@@ -48,9 +72,10 @@ export const name = 'web-search-anysearch'
 export const inject = ['slots', 'locale', 'remote', 'remote.credentials', 'settingsScope']
 
 /**
- * Mount the card's controller and register the slot entry. The slot is
- * declared by the deployed Plugins page; `slots.inject` waits for that
- * declaration, so a host half without the web GUI leaves this entry dormant.
+ * Mount the card's controller and register it into whichever configuration
+ * slot this deployment's Plugins page declares. A slot no page declares is
+ * simply never injected, so registering twice is how one bundle serves both
+ * page generations.
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: Context): void {
@@ -74,10 +99,29 @@ export function apply(ctx: Context): void {
     'web-search-anysearch: credential invalidations',
   )
 
-  ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
-    name: 'settings.plugin.item',
-    key: ANYSEARCH_SETTINGS_NS,
+  /**
+   * The share both registrations carry: the dictionary namespace that
+   * synthesizes the card's `t` seat, and the business face its renderer binds.
+   * `locale` keeps the literal type — a slot constrains it to its declared
+   * namespaces, and a widened `string` would fail that check.
+   */
+  const entry: { locale: typeof LOCALE_NS; inject: () => AnySearchCardFace } = {
     locale: LOCALE_NS,
     inject: (): AnySearchCardFace => controller.inject(),
+  }
+
+  // 0.1.6-alpha.2: the Plugins page renders a bundle's own configuration on the
+  // bundle's page, keyed by the bundle's package name.
+  ctx.slots.inject(BUNDLE_CONFIG_SLOT, () => ctx.slots.register({
+    name: BUNDLE_CONFIG_SLOT,
+    key: ANYSEARCH_PACKAGE_NAME,
+    ...entry,
+  }, AnySearchCard))
+
+  // Pre-0.1.6: the page paired a card with a settings namespace instead.
+  ctx.slots.inject(LEGACY_ITEM_SLOT, () => ctx.slots.register({
+    name: LEGACY_ITEM_SLOT,
+    key: ANYSEARCH_SETTINGS_NS,
+    ...entry,
   }, AnySearchCard))
 }

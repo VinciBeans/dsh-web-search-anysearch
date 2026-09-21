@@ -11,6 +11,13 @@
  * @module @wenqi_bian/dsh-web-search-anysearch/client/controller
  */
 
+/**
+ * This bundle's package name. It is the key the Plugins page dispatches
+ * `plugins.bundle.config` by, so the card has to name it exactly as the
+ * profile's `dsh.profile.bundles` entry does.
+ */
+export const ANYSEARCH_PACKAGE_NAME = '@wenqi_bian/dsh-web-search-anysearch'
+
 /** Settings namespace this card edits. */
 export const ANYSEARCH_SETTINGS_NS = 'web-search-anysearch'
 

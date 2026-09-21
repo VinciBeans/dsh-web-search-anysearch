@@ -6,7 +6,13 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 ## 兼容性
 
-针对 dsh v0.1.2-alpha.1 ~ alpha.5、v0.1.2-rc.1、v0.1.3-alpha.2 与 v0.1.5-alpha.1 八个 tag 验证（本插件消费的契约面在八个版本上一致；CI 矩阵逐个验证）。`0.1.5-alpha.1` 版本已把声明式 peer 范围扩展到 0.1.5 线；npm `alpha` 构建（`0.1.3-alpha.2`）在 v0.1.5-alpha.1 上同样可用——消费的契约未变。
+针对 dsh v0.1.2-alpha.1 ~ alpha.5、v0.1.2-rc.1、v0.1.3-alpha.2、v0.1.5-alpha.1 与 v0.1.6-alpha.2 共九个 tag 验证（CI 矩阵逐个验证；本插件消费的契约面在 0.1.2 ~ 0.1.5 各版本上一致，这些腿是为了守住承诺而非覆盖差异）。`0.1.6-alpha.2` 重建了 Plugins 页面，见下节。
+
+### Plugins 页面的两代契约
+
+dsh `0.1.6-alpha.2` 把 Plugins 页面从「卡片列表」改成了「bundle 自己的页面」，本插件卡片原先注册的槽位（`settings.plugin.item`）已不存在。浏览器半现在把同一张卡片注册两次：`0.1.6-alpha.2` 及以后走 `plugins.bundle.config`（以本 bundle 的包名 `@wenqi_bian/dsh-web-search-anysearch` 为 key，即 profile `dsh.profile.bundles` 里的那一项），更早版本走 `settings.plugin.item`。部署声明了哪个槽位，哪次注册才会生效——未声明的槽位不会被注入，因此同一份构建同时服务两代：0.1.6 上卡片出现在 **插件 → `@wenqi_bian/dsh-web-search-anysearch`** 这一页，0.1.5 及更早出现在 **设置 → 插件 → 插件配置**。宿主半、设置命名空间与搜索路由均未改动。
+
+0.1.6 上 bundle 声明本身也重要：Plugins 页面只为 profile `dsh.profile.bundles` 里列出的包渲染配置，所以请以 bundle 形式安装（`dsh plugin --profile web add …`），不要只手写一行组合行。升级插件后需**重启 `dsh web`**——浏览器 bundle 在启动时分发。
 
 ### 支持策略
 
@@ -38,7 +44,7 @@ npm 包内附预构建的宿主与浏览器 bundle，安装无需构建步骤。
 
 ### 从源码安装
 
-源码版本 `0.1.5-alpha.1`（即 GitHub Release `v0.1.5-alpha.1` 发布的内容），用于本地开发：
+源码版本 `0.1.6-alpha.2`（即 GitHub Release `v0.1.6-alpha.2` 发布的内容），用于本地开发：
 
 ```bash
 dsh plugin --profile web add .
@@ -54,7 +60,7 @@ dsh --profile web --dump-config
 
 ## 在 GUI 中切换搜索服务
 
-打开 **设置 → 插件 → 插件配置 → AnySearch 搜索服务**。卡片第一项就是切换开关；保存后下一次 `web_search` 立即使用新后端，无需重启：
+dsh `0.1.6-alpha.2` 上打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`**（Plugins 页面里本 bundle 自己的页面，标题为包短名，说明下方就是配置表单）；`0.1.5-alpha.1` 及更早打开 **设置 → 插件 → 插件配置 → AnySearch 搜索服务**。两种入口的表单第一项都是切换开关；保存后下一次 `web_search` 立即使用新后端，无需重启：
 
 - **AnySearch**（默认）——按卡片上的 API Key / 接口地址调用 `POST {base}/v1/search`。
 - **官方 DeepSeek 搜索**——委托给内置的 DeepSeek 搜索路径；其 key、端点、模型与预算仍由 dsh 自带的 **Web search (DeepSeek)** 卡片配置，本开关只做后端选择。
@@ -92,7 +98,7 @@ DSH_WEB_SEARCH_PROVIDER=anysearch dsh web
 ## 已知限制
 
 - **仅通用搜索。** dsh seam 请求只携带 `query` 与 `maxResults`；AnySearch 的垂直领域（`finance.quote` 等）、其必填 params、`zone`/`language` 以及 `/v1/extract` 端点无法经 `web_search` 触达。
-- 切换卡片需要 dsh web GUI 组合本插件（浏览器半部经 `dsh.client` 分发）；headless profile 下功能完整，但只能走配置文件切换。
+- 配置表单需要 dsh web GUI 组合本插件（浏览器半部经 `dsh.client` 分发）**且**本 bundle 在 profile 的 `dsh.profile.bundles` 里——0.1.6 上表单就是 bundle 自己的页面，只注册行、未登记 bundle 的 profile 看不到表单。headless profile 下功能完整，但只能走配置文件切换。
 - 选中官方后端时，其可用性跟随内置 DeepSeek 搜索设置（需要 key 与合法端点）；AnySearch 始终支持匿名。内置插件 `@deepseek-ai/dsh-web-search-deepseek` 是**可选 peer**，按需动态加载：未组合该插件的部署仍能加载本插件并使用 AnySearch，官方一侧报告不可用。
 - 搜索词会发送到 `https://api.anysearch.com`（可用 `ANYSEARCH_API_BASE_URL` 或卡片上的接口地址覆盖）；返回内容视为不可信外部数据。
 

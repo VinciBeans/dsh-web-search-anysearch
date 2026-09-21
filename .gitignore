@@ -6,3 +6,6 @@ lib/
 .dsh/
 *.tsbuildinfo
 dev.cordis.yml
+
+# Local compatibility-audit notes (absolute paths, throwaway DSH homes).
+.compat/
