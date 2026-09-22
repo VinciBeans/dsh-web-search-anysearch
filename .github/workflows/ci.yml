@@ -81,8 +81,15 @@ jobs:
           node --input-type=module -e "
             const m = await import('./lib/index.js');
             if ('default' in m) throw new Error('host bundle must not have a default export');
-            for (const k of ['name', 'Config', 'apply', 'ANYSEARCH_PROVIDER_ID']) if (!(k in m)) throw new Error('missing export ' + k);
+            for (const k of ['name', 'Config', 'apply', 'ANYSEARCH_PROVIDER_ID', 'configValueOf']) if (!(k in m)) throw new Error('missing export ' + k);
+            // The parsed config shape depends on the schema builder: a volatile
+            // field resolves to a reference (schemastery >= 3.18.3, which dsh
+            // 0.1.7 ships), a plain one to the value. Read both through the
+            // documented reader, exactly as apply does.
             const cfg = m.Config({});
-            if (cfg.apiKeyEnv !== 'ANYSEARCH_API_KEY') throw new Error('schema defaults broken');
+            if (m.configValueOf(cfg.apiKeyEnv) !== 'ANYSEARCH_API_KEY') throw new Error('schema defaults broken');
+            if (m.configValueOf(cfg.searchProvider) !== 'anysearch') throw new Error('switch default broken');
+            const resolved = m.resolveConfig({ searchProvider: { get: () => 'deepseek-official' } });
+            if (resolved.searchProvider !== 'deepseek-official') throw new Error('reference-shaped config broken');
             console.log('host smoke ok');
           "
