@@ -233,6 +233,11 @@ test('apply registers the switch provider and reads the switch from the section'
     installed.hooks.setSource(() => ({ searchProvider: 'deepseek-official', apiKeyEnv: 'ANYSEARCH_API_KEY' }))
   }
   await captured.search({ query: 'q' })
+  console.log('DIAG', JSON.stringify({
+    hasLegacyInstaller: typeof settingsSdk.installSettingsSection,
+    installed: installed === undefined ? null : { ns: installed.ns, entry: installed.entry },
+    url: calls[0]?.url,
+  }))
   assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
   assert.equal(calls[0].init.headers.authorization, 'Bearer dsk-stored')
 })
