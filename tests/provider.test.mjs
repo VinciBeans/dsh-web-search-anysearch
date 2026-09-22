@@ -185,18 +185,19 @@ test('apply registers the switch provider and reads the switch from the section'
   // The section a settings service resolves for this namespace. The plugin reads
   // whatever the seam last handed it — the installer calls `setSource` itself
   // when it attaches, so a test that wants a committed change reflected has to
-  // move the SERVICE, not just the thunk it handed over. This is also what makes
-  // the assertion below meaningful on every tag.
-  const resolved = {}
+  // move the SERVICE, not just the thunk it handed over. The double resolves the
+  // same way the seam does: the composition entry as `base` with nothing stored
+  // on top, which is also where the AnySearch key comes from.
+  let applied = {}
   const settings = settingsSdk.installSettingsSection === undefined
     ? {}
     : {
         register(ns, _schema, options) {
-          Object.assign(resolved, options?.base)
-          return { get: () => resolved, watch: () => () => {} }
+          applied = options?.base ?? {}
+          return { get: () => applied, watch: () => () => {} }
         },
         update(ns, patch) {
-          Object.assign(resolved, patch)
+          applied = { ...applied, ...patch }
         },
         installSection(owner, ns, schema, entry, hooks) {
           installed = { owner, ns, schema, entry, hooks }
@@ -217,10 +218,17 @@ test('apply registers the switch provider and reads the switch from the section'
     logger: { warn: () => {} },
     web: { registerSearchProvider: (p) => { captured = p } },
   }
-  // The composition entry as 0.1.7 hands it over: a Volatile reference whose
-  // value the framework commits into in place.
+  // The composition entry, as a profile patch declares it. It carries a key so
+  // the AnySearch branch is credentialed; the official branch takes its key from
+  // the built-in provider's live entry above. The switch is a live reference
+  // that the test commits into, which is how 0.1.7 publishes an edit.
   const live = { searchProvider: 'anysearch' }
-  apply(ctx, { searchProvider: { get: () => live.searchProvider } })
+  const composition = {
+    searchProvider: { get: () => live.searchProvider },
+    apiKey: { get: () => 'anysearch-key' },
+    baseURL: { get: () => 'https://a.example' },
+  }
+  apply(ctx, composition)
   assert.equal(captured.id, 'anysearch')
   assert.equal(captured.available(), true)
 
@@ -229,10 +237,9 @@ test('apply registers the switch provider and reads the switch from the section'
     calls.push({ url: String(url), init })
     return new Response(JSON.stringify(ONE_RESULT), { status: 200 })
   }
-  // Whichever shape this dsh uses, a committed change re-routes the next search:
-  // through the settings service where the installer attached one, through the
-  // live config reference on 0.1.7, where the installer is gone and the reference
-  // IS the source. Either way the change lands where the plugin reads.
+  // A committed change re-routes the next search without re-registering. Which
+  // write mechanism carries it depends on the release: the settings service
+  // where one is composed, and on 0.1.7 the entry's live config reference.
   if (installed === undefined) {
     live.searchProvider = 'deepseek-official'
   } else {
@@ -243,25 +250,7 @@ test('apply registers the switch provider and reads the switch from the section'
     settings.update('web-search-anysearch', { searchProvider: 'deepseek-official' })
   }
   await captured.search({ query: 'q' })
-  if (settingsSdk.installSettingsSection === undefined) {
-    // 0.1.7-alpha.1 and this file's other modern legs: the live reference is the
-    // source, so the re-route above is the whole contract.
-    assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
-  } else if (installed !== undefined) {
-    // v0.1.2-alpha.1 is the only tag that exports the module-level
-    // `installSettingsSection`; every later tag moved the installer onto the
-    // service. Its `ctx.inject(['settings'])` callback is what hands the source
-    // back, and this double cannot reproduce that tag's inject semantics
-    // faithfully — the callback runs against a mock context whose fiber the real
-    // one resolves before attaching the section. The registration itself is
-    // asserted above; the re-route it would carry is covered by every other leg
-    // in the matrix, including the current target.
-    console.log('note: module-level installer shape (v0.1.2-alpha.1); re-route assertion not applicable to this double')
-    assert.equal(installed.ns, 'web-search-anysearch')
-  } else {
-    // Another service-method installer whose section the double never attached.
-    assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
-  }
+  assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
   assert.equal(calls[0].init.headers.authorization, 'Bearer dsk-stored')
 })
 
