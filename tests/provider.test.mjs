@@ -188,7 +188,11 @@ test('apply registers the switch provider and reads the switch from the section'
   // module export is the discriminator: it went away with the seam.
   const settings = settingsSdk.installSettingsSection === undefined
     ? {}
-    : { installSection(owner, ns, schema, entry, hooks) { installed = { owner, ns, schema, entry, hooks } } }
+    : {
+        installSection(owner, ns, schema, entry, hooks) {
+          installed = { owner, ns, schema, entry, hooks }
+        },
+      }
   // The built-in provider's live config, as the loader exposes it: on
   // 0.1.7-alpha.1 every declared field is a Volatile reference.
   const deepseekConfig = {
@@ -273,9 +277,14 @@ test('installs through whichever section installer the dsh build provides', asyn
   // service method, and with neither present the plugin keeps the composition
   // entry. Either outcome keeps the provider registered.
   const settings = {
-    register(ns) {
+    register(ns, _schema, options) {
       registeredNs = ns
-      return { get: () => ({}), watch: () => () => {} }
+      // The seam resolves the section: the composition entry the consumer
+      // declared as `base`, with whatever the stored document layers on top
+      // (nothing here). The plugin reads whatever `get()` answers on every
+      // search, so a double returning an empty object would model an entry that
+      // carries no config at all.
+      return { get: () => options.base, watch: () => () => {} }
     },
   }
   const ctx = {
