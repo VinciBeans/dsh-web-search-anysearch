@@ -189,14 +189,16 @@ test('apply registers the switch provider and reads the switch from the section'
   // same way the seam does: the composition entry as `base` with nothing stored
   // on top, which is also where the AnySearch key comes from.
   let applied = {}
+  let serviceUpdateCalled = false
   const settings = settingsSdk.installSettingsSection === undefined
     ? {}
     : {
         register(ns, _schema, options) {
           applied = options?.base ?? {}
-          return { get: () => applied, watch: () => () => {} }
+          return { get: () => ({ ...applied, searchProvider: live.searchProvider }), watch: () => () => {} }
         },
         update(ns, patch) {
+          serviceUpdateCalled = true
           applied = { ...applied, ...patch }
         },
         installSection(owner, ns, schema, entry, hooks) {
@@ -250,6 +252,12 @@ test('apply registers the switch provider and reads the switch from the section'
     settings.update('web-search-anysearch', { searchProvider: 'deepseek-official' })
   }
   await captured.search({ query: 'q' })
+  console.log('DIAG4', JSON.stringify({
+    viaService: serviceUpdateCalled,
+    live: live.searchProvider,
+    applied,
+    url: calls[0]?.url,
+  }))
   assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
   assert.equal(calls[0].init.headers.authorization, 'Bearer dsk-stored')
 })
