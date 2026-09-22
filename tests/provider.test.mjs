@@ -222,7 +222,10 @@ test('apply registers the switch provider and reads the switch from the section'
   }
   // Whichever shape this dsh uses, a committed change re-routes the next search:
   // through the section installer where one exists, through the live reference
-  // on 0.1.7, where the installer is gone and the reference IS the source.
+  // on 0.1.7, where the installer is gone and the reference IS the source. The
+  // source the seam hands back is captured here so the diagnostic below can read
+  // it back through the plugin's own resolver.
+  const source = () => ({ searchProvider: 'deepseek-official', apiKeyEnv: 'ANYSEARCH_API_KEY' })
   if (installed === undefined) {
     live.searchProvider = 'deepseek-official'
   } else {
@@ -230,12 +233,21 @@ test('apply registers the switch provider and reads the switch from the section'
     assert.equal(installed.owner, ctx)
     assert.equal(typeof installed.hooks.setSource, 'function')
     assert.equal(typeof installed.hooks.onChange, 'function')
-    installed.hooks.setSource(() => ({ searchProvider: 'deepseek-official', apiKeyEnv: 'ANYSEARCH_API_KEY' }))
+    installed.hooks.setSource(source)
   }
   await captured.search({ query: 'q' })
-  console.log('DIAG', JSON.stringify({
+  console.log('DIAG3', JSON.stringify({
     hasLegacyInstaller: typeof settingsSdk.installSettingsSection,
-    installed: installed === undefined ? null : { ns: installed.ns, entry: installed.entry },
+    // What the plugin was handed as its composition config, and what the test
+    // then told it to read instead. Both are read back through the plugin's own
+    // reader, so a mismatch here names the failing link exactly.
+    compositionReads: (() => {
+      try { return resolveConfig({ searchProvider: { get: () => live.searchProvider } }) } catch (error) { return `threw: ${String(error)}` }
+    })(),
+    sourceReads: (() => {
+      try { return resolveConfig(source) } catch (error) { return `threw: ${String(error)}` }
+    })(),
+    installedNs: installed?.ns ?? null,
     url: calls[0]?.url,
   }))
   assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
