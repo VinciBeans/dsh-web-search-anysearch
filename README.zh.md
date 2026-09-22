@@ -6,21 +6,21 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 ## 兼容性
 
-针对 dsh v0.1.2-alpha.1 ~ alpha.5、v0.1.2-rc.1、v0.1.3-alpha.2、v0.1.5-alpha.1、v0.1.6-alpha.2 与 v0.1.7-alpha.1 共十个 tag 验证（CI 矩阵逐个验证；本插件消费的契约面在 0.1.2 ~ 0.1.5 各版本上一致，这些腿是为了守住承诺而非覆盖差异）。`0.1.6-alpha.2` 重建了 Plugins 页面，`0.1.7-alpha.1` 又同时重建了页面与设置 seam，见下节。
+**要求 dsh `v0.1.5-alpha.1` 或更高。** CI 矩阵逐一验证该下限之后的每个发布：v0.1.5-alpha.1、v0.1.5-alpha.2、v0.1.5-rc.1、v0.1.5-rc.2、v0.1.6-alpha.2 与 v0.1.7-alpha.1。（dsh 从未发布 `0.1.4`——谱系是 `0.1.3-alpha.2` → `0.1.5-alpha.1`。）
 
 ### 设置与页面的两代契约
 
-0.1.5 之后，本插件消费的两个契约各被重建过一次，每个版本只有其中一种形状；插件自行探测，因此一份构建服务整个区间。
+在该区间内，本插件消费的两个契约各有两种形状，每个版本只携带其中一种；插件自行探测，因此一份构建服务整个区间。
 
 **设置 seam。** 直到 `0.1.6-alpha.2`，插件通过 `ctx.settings.installSection(...)` 注册配置节，再通过回调拿到的 scope 读取。`0.1.7-alpha.1` 删掉了这个调用：schema 上标记 `.volatile()` 的字段会以「稳定引用」的形式交给 `apply`，`get()` 返回当前值，profile 改动由框架就地写入该引用而不再重挂插件。本插件的 schema 在构建器支持时把每个字段都标为 volatile（`.volatile()` 自 schemastery 3.18.3 起存在，0.1.7 是首个携带它的版本），读取时两种形状都认，并且只在仍有安装器的版本上注册设置节。它对「官方 DeepSeek 搜索」的委托同样改为从 loader 读取对方的实时配置，缺少该 seam 的版本再回落设置服务。
 
-**Plugins 页面。** `0.1.6-alpha.2` 把卡片列表换成「bundle 自己的配置页」；`0.1.7-alpha.1` 又改成「每一行的页面」，并把该行的实时取值与写入命令作为 owner props 交给卡片。浏览器半对它已知的三个槽位都注册——`plugins.row.config`（key 为 `<包名>#<行 id>`，0.1.7 的形式，表单由页面提供）、`plugins.bundle.config`（按包名，0.1.6）、`settings.plugin.item`（0.1.6 之前）——部署没声明的槽位根本不会被注入。于是卡片在 0.1.7 上出现在该行页面、0.1.6 上出现在 bundle 页面、0.1.5 及更早出现在 **设置 → 插件 → 插件配置**。
+**Plugins 页面。** `0.1.6-alpha.2` 把卡片列表换成「bundle 自己的配置页」；`0.1.7-alpha.1` 又改成「每一行的页面」，并把该行的实时取值与写入命令作为 owner props 交给卡片。浏览器半对该区间已知的三个槽位都注册——`plugins.row.config`（key 为 `<包名>#<行 id>`，0.1.7 的形式，表单由页面提供）、`plugins.bundle.config`（按包名，0.1.6）、`settings.plugin.item`（0.1.5 线）——部署没声明的槽位根本不会被注入。于是卡片在 0.1.7 上出现在该行页面、0.1.6 上出现在 bundle 页面、0.1.5 上出现在 **设置 → 插件 → 插件配置**。
 
-宿主半的路由、`cordis.patch.yml` 的 pin 与凭据处理在整个区间未变。
+宿主半的路由、`cordis.patch.yml` 的 pin 与凭据处理在整个区间一致。
 
 ### 支持策略
 
-**0.1.2 线（`v0.1.2-alpha.1` ~ `v0.1.2-rc.1`）已进入遗留（legacy）状态。** 当前代码仍然兼容该线，CI 矩阵也仍在验证这些 tag，但支持到此为止：**后续版本将放弃对 0.1.2 的支持。** 若上游 dsh 后续版本改动了本插件消费的契约、导致 0.1.2 线不可用，本插件不再为 0.1.2 做适配——已发布的 0.1.2 版本保持冻结，不再更新。若你的宿主仍停留在该线，请固定使用 `0.1.2-rc.1`（npm `latest`）或 `0.1.3-alpha.2`（npm `alpha`）。
+支持范围自 **`v0.1.5-alpha.1`** 起。**0.1.2 线（`v0.1.2-alpha.1` ~ `v0.1.2-rc.1`）与 `v0.1.3-alpha.2` 已不再支持**：本插件版本不携带它们的代码路径（0.1.2 线的模块级设置安装器），peer 范围也拒绝它们，CI 矩阵同样不再验证。若你的宿主仍停留在下限以下，请固定使用对应那条线的插件发布——`0.1.3-alpha.2`（npm `alpha`）或 `0.1.2-rc.1`（npm `latest`）——两者都已发布并保持冻结。
 
 ## 安装
 
@@ -32,23 +32,23 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 按你的宿主版本选择 dist-tag：
 
-1. **npm `alpha`**（`0.1.3-alpha.2`）——当前 npm 构建；兼容 dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2（其中 0.1.2 支持为遗留状态，见上）：
+1. **npm `alpha`**——当前 npm 构建：
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
    ```
 
-2. **npm `latest`**（`0.1.2-rc.1`）——遗留的 0.1.2 线，已冻结；兼容 dsh v0.1.2-alpha.1 ~ rc.1：
+2. **npm `latest`**（`0.1.2-rc.1`）——已冻结的 0.1.2 线，供**低于本插件下限**的宿主使用：
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
    ```
 
-npm 包内附预构建的宿主与浏览器 bundle，安装无需构建步骤。
+npm 包内附预构建的宿主与浏览器 bundle，安装无需构建步骤。已发布的构建只支持它发布时所对应的宿主下限——若你固定使用更早的发布，请查该 tag 上的 README。
 
 ### 从源码安装
 
-源码版本 `0.1.7-alpha.1`（即 GitHub Release `v0.1.7-alpha.1` 发布的内容），用于本地开发：
+源码版本 `0.1.7-alpha.2`（即 GitHub Release `v0.1.7-alpha.2` 发布的内容），用于本地开发：
 
 ```bash
 dsh plugin --profile web add .
@@ -64,7 +64,7 @@ dsh --profile web --dump-config
 
 ## 在 GUI 中切换搜索服务
 
-dsh `0.1.7-alpha.1` 上打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch` → `web-search-anysearch` 行**（配置在该行的页面上）；`0.1.6-alpha.2` 上打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`**（bundle 自己的页面）；`0.1.5-alpha.1` 及更早打开 **设置 → 插件 → 插件配置 → AnySearch 搜索服务**。各入口的表单第一项都是切换开关；保存后下一次 `web_search` 立即使用新后端，无需重启：
+dsh `0.1.7-alpha.1` 上打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch` → `web-search-anysearch` 行**（配置在该行的页面上）；`0.1.6-alpha.2` 上打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`**（bundle 自己的页面）；`0.1.5` 线上打开 **设置 → 插件 → 插件配置 → AnySearch 搜索服务**。各入口的表单第一项都是切换开关；保存后下一次 `web_search` 立即使用新后端，无需重启：
 
 - **AnySearch**（默认）——按卡片上的 API Key / 接口地址调用 `POST {base}/v1/search`。
 - **官方 DeepSeek 搜索**——委托给内置的 DeepSeek 搜索路径；其 key、端点、模型与预算仍由 dsh 自带的 **Web search (DeepSeek)** 卡片配置，本开关只做后端选择。

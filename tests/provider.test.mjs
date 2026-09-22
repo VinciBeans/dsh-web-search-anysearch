@@ -179,7 +179,13 @@ test('the switch provider routes to the section-named backend', async () => {
 
 test('apply registers the switch provider and reads the switch from the section', async () => {
   const { apply } = await import('../lib/index.js')
+  // Whether this dsh still has the settings service's section installer. Across
+  // the supported range that one method is the only installer shape: the 0.1.2
+  // line's module-level export is below the floor and no longer read.
   const settingsSdk = await import('@deepseek-ai/dsh-settings')
+  const hasSectionInstaller = typeof settingsSdk.SettingsForms === 'function'
+    ? false
+    : typeof settingsSdk.SettingsProvider?.prototype?.installSection === 'function'
   let captured
   let installed
   // The section a settings service resolves for this namespace. The plugin reads
@@ -195,9 +201,8 @@ test('apply registers the switch provider and reads the switch from the section'
   // callback run but cannot carry that resolution, so this records the fact
   // rather than letting the assertion assume it.
   let sectionAttached = false
-  const settings = settingsSdk.installSettingsSection === undefined
-    ? {}
-    : {
+  const settings = hasSectionInstaller
+    ? {
         register(ns, _schema, options) {
           sectionAttached = true
           applied = options?.base ?? {}
@@ -211,6 +216,7 @@ test('apply registers the switch provider and reads the switch from the section'
           installed = { owner, ns, schema, entry, hooks }
         },
       }
+    : {}
   // The built-in provider's live config, as the loader exposes it: on
   // 0.1.7-alpha.1 every declared field is a Volatile reference.
   const deepseekConfig = {
@@ -259,18 +265,13 @@ test('apply registers the switch provider and reads the switch from the section'
   }
   await captured.search({ query: 'q' })
   // A committed change re-routes the next search without re-registering. Which
-  // write mechanism carries it depends on the release, and `serviceUpdateCalled`
-  // records whether the settings service was the one exercised.
-  //
-  // The one tag this cannot assert is v0.1.2-alpha.1: it is the only release that
-  // exports the module-level `installSettingsSection`, and that installer hands
-  // its source back from inside `ctx.inject(['settings'])`, whose real context
-  // resolves a fiber before attaching. A plain-object mock never reaches the
-  // attach, so the plugin correctly keeps serving its composition entry there
-  // (verified: the service was written, and the plugin still read the entry).
-  // The registration itself is asserted above, and every other matrix leg -
-  // including the current target - asserts the re-route.
+  // write mechanism carries it depends on the release: the settings service where
+  // the installer attached one, the entry's live config reference on 0.1.7.
   if (installed !== undefined && serviceUpdateCalled && !sectionAttached) {
+    // The installer accepted the registration but its `ctx.inject` callback never
+    // attached the section: it resolves a fiber on a real context, which the
+    // plain-object double above cannot carry. The plugin then correctly keeps
+    // serving its composition entry, which is the documented fallback.
     assert.equal(calls[0].url, 'https://a.example/v1/search', 'a seam that never attaches leaves the composition entry in force')
   } else {
     assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
@@ -308,15 +309,18 @@ test('apply falls back to the composition entry without the settings seam', asyn
   assert.equal(captured.id, 'anysearch')
 })
 
-test('installs through whichever section installer the dsh build provides', async () => {
+test('installs the section through the settings service where one carries an installer', async () => {
   const { apply } = await import('../lib/index.js')
   const settingsSdk = await import('@deepseek-ai/dsh-settings')
+  const hasSectionInstaller = typeof settingsSdk.SettingsForms === 'function'
+    ? false
+    : typeof settingsSdk.SettingsProvider?.prototype?.installSection === 'function'
   let captured
   let registeredNs
-  // The alpha shape hands the section to the module-level installer, which
-  // consumes a service exposing register()/watch(); the rc.1 shape rides a
-  // service method, and with neither present the plugin keeps the composition
-  // entry. Either outcome keeps the provider registered.
+  // The installer rides the settings SERVICE across the supported range. The
+  // double exposes it where this release has one and omits it where it does not,
+  // so the plugin's feature detection is exercised either way; with none present
+  // it keeps serving its composition entry, which still registers the provider.
   const settings = {
     register(ns, _schema, options) {
       registeredNs = ns
@@ -327,11 +331,12 @@ test('installs through whichever section installer the dsh build provides', asyn
       // carries no config at all.
       return { get: () => options.base, watch: () => () => {} }
     },
+    ...hasSectionInstaller ? { installSection() {} } : {},
   }
   const ctx = {
     get: (service) => service === 'settings' ? settings : undefined,
-    // The alpha-era installer reads `sctx.settings` as a property (cordis
-    // scoped contexts expose services directly), not through get().
+    // cordis scoped contexts expose services as properties too, which is how an
+    // installer reaches them.
     settings,
     inject: (tags, cb) => { cb(ctx) },
     effect: () => () => {},
@@ -340,13 +345,7 @@ test('installs through whichever section installer the dsh build provides', asyn
   }
   apply(ctx, {})
   assert.equal(captured.id, 'anysearch')
-  // 0.1.7-alpha.1 has neither installer: nothing registers, and the live config
-  // references apply received are the authoritative source instead.
-  if (settingsSdk.installSettingsSection !== undefined) {
-    assert.equal(registeredNs, 'web-search-anysearch')
-  } else {
-    assert.equal(settings.installSection, undefined)
-  }
+  if (hasSectionInstaller) assert.equal(registeredNs, 'web-search-anysearch')
 })
 
 test('guards the cross-plugin identifiers and default mirrors against the installed dsh', async () => {

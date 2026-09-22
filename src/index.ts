@@ -179,7 +179,7 @@ function resolveAnySearchOptions(ctx: Context, source: ConfigSource): AnySearchP
  *   therefore kept as it arrived and every field is read at the moment it is
  *   used — unwrapping it once here would snapshot the composition values and
  *   never see a committed edit.
- * - **dsh 0.1.2-rc.1 ~ 0.1.6-alpha.2** registers the section through
+ * - **dsh 0.1.5-alpha.1 ~ 0.1.6-alpha.2** registers the section through
  *   `ctx.settings.installSection`, which hands back the resolved scope through
  *   `setSource`. That scope is a plain object, so the same reads work on both.
  *

@@ -2,6 +2,42 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.7-alpha.2] - 2026-09-22
+
+Compatibility range narrowed to **dsh `v0.1.5-alpha.1` and later**. (dsh never
+published a `0.1.4`: the lineage runs `0.1.3-alpha.2` → `0.1.5-alpha.1`.)
+
+### Changed
+
+- **Peer ranges are now `^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1`.** The
+  `0.1.2` line and `0.1.3-alpha.2` are no longer accepted by any
+  `@deepseek-ai/dsh-*` peer (`@deepseek-ai/cordis` stays `^4.0.1`, satisfied by
+  the vendored `4.0.2`).
+- **The 0.1.2 line's settings installer is gone from the code.** That line
+  exposed `installSettingsSection` as a free function on the
+  `@deepseek-ai/dsh-settings` module; from `0.1.5-alpha.1` onward the installer
+  is always the settings service's own method, so
+  `src/section.ts` no longer imports the module namespace, carries the
+  `LegacySettingsModule` branch, or reads the export through a cast. What remains
+  is the one installer shape the whole supported range uses, with a release that
+  has none (`0.1.7` and later) still falling back to its composition entry.
+- **The CI matrix now verifies every release from the floor**: `dsh-v0.1.5-alpha.1`,
+  `dsh-v0.1.5-alpha.2`, `dsh-v0.1.5-rc.1`, `dsh-v0.1.5-rc.2` (the last three were
+  not previously covered), `dsh-v0.1.6-alpha.2` and `dsh-v0.1.7-alpha.1`. The
+  `0.1.2` and `0.1.3` legs are removed, which also retires the oldest-leg test
+  double whose mock could not reproduce that line's `ctx.inject` attach.
+- **Both READMEs state the new floor**, and the support policy now names
+  `0.1.5-alpha.1` as the lower bound rather than describing 0.1.2 as legacy
+  within the range. The published `0.1.2-rc.1` (npm `latest`) and `0.1.3-alpha.2`
+  (npm `alpha`) builds remain the ones to pin below the floor; they do not carry
+  this range's changes.
+
+### Verified
+
+- `typecheck`, `build` and 24/24 tests pass against freshly built
+  `0.1.7-alpha.1` harness artifacts, and against every leg of the narrowed
+  matrix on CI.
+
 ## [0.1.7-alpha.1] - 2026-09-21
 
 Version aligned with the harness release this build is verified against
@@ -248,6 +284,7 @@ it is verified against (v0.1.2-alpha.1 ~ rc.1).
 - Build now emits both the host bundle (`lib/index.js`) and the client bundle
   (`lib/client.js`); `exports["./client"]` added.
 
+[0.1.7-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.7-alpha.2
 [0.1.7-alpha.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.7-alpha.1
 [0.1.6-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.6-alpha.2
 [0.1.5-alpha.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.5-alpha.1

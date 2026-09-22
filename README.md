@@ -6,21 +6,21 @@ dsh exposes one model-facing `web_search` tool and picks the real backend throug
 
 ## Compatibility
 
-Tested against dsh v0.1.2-alpha.1 ~ alpha.5, v0.1.2-rc.1, v0.1.3-alpha.2, v0.1.5-alpha.1, v0.1.6-alpha.2 and v0.1.7-alpha.1 (ten tags; the CI matrix verifies each one). Nothing this plugin consumes changed across the 0.1.2 ~ 0.1.5 tags, so those legs verify the promise rather than cover a difference. `0.1.6-alpha.2` rebuilt the Plugins page and `0.1.7-alpha.1` rebuilt both the page and the settings seam: see [Settings and page generations](#settings-and-page-generations).
+**Requires dsh `v0.1.5-alpha.1` or later.** The CI matrix verifies every release from that floor: v0.1.5-alpha.1, v0.1.5-alpha.2, v0.1.5-rc.1, v0.1.5-rc.2, v0.1.6-alpha.2 and v0.1.7-alpha.1. (dsh never published a `0.1.4` — the lineage runs `0.1.3-alpha.2` → `0.1.5-alpha.1`.)
 
 ### Settings and page generations
 
-Two contracts this plugin consumes were rebuilt after 0.1.5, and each release carries exactly one shape. The plugin detects which, so one build serves the whole range.
+Two contracts this plugin consumes have two shapes each across that range, and every release carries exactly one. The plugin detects which, so one build serves the whole range.
 
-**The settings seam.** Up to `0.1.6-alpha.2`, a plugin registered its configuration with `ctx.settings.installSection(...)` and read it through the scope that came back. `0.1.7-alpha.1` removed that call: a schema field marked `.volatile()` is handed to `apply` as a stable reference whose `get()` returns the live value, and the framework commits a profile edit into that reference instead of remounting the plugin. This plugin's schema marks every field volatile where the installed schema builder supports it (`.volatile()` arrived in schemastery 3.18.3, which 0.1.7 is the first release to ship), reads fields through either shape, and registers a section only where an installer still exists. Its "official DeepSeek search" delegation likewise reads that plugin's entry from the loader (its live config) and falls back to the settings service on releases that lack one.
+**The settings seam.** Through `0.1.6-alpha.2`, a plugin registered its configuration with `ctx.settings.installSection(...)` and read it through the scope that came back. `0.1.7-alpha.1` removed that call: a schema field marked `.volatile()` is handed to `apply` as a stable reference whose `get()` returns the live value, and the framework commits a profile edit into that reference instead of remounting the plugin. This plugin's schema marks every field volatile where the installed schema builder supports it (`.volatile()` arrived in schemastery 3.18.3, which 0.1.7 is the first release to ship), reads fields through either shape, and registers a section only where an installer still exists. Its "official DeepSeek search" delegation likewise reads that plugin's entry from the loader (its live config) and falls back to the settings service on releases that lack one.
 
-**The Plugins page.** `0.1.6-alpha.2` replaced the card list with a page that dispatches a bundle's own configuration; `0.1.7-alpha.1` moved that to a per-row page and hands the entry's values and write command to the card as owner props. The browser half registers into all three slots it has known — `plugins.row.config` (keyed `<package>#<row id>`, what 0.1.7 asks for, with the page supplying the form), `plugins.bundle.config` (keyed by package name, 0.1.6), and `settings.plugin.item` (pre-0.1.6) — and a slot a deployment's page does not declare is simply never injected. So the card appears on this row's page on 0.1.7, on the bundle's page on 0.1.6, and in **设置 → 插件 → 插件配置** on 0.1.5 and older.
+**The Plugins page.** `0.1.6-alpha.2` replaced the card list with a page that dispatches a bundle's own configuration; `0.1.7-alpha.1` moved that to a per-row page and hands the entry's values and write command to the card as owner props. The browser half registers into the three slots this range has known — `plugins.row.config` (keyed `<package>#<row id>`, what 0.1.7 asks for, with the page supplying the form), `plugins.bundle.config` (keyed by package name, 0.1.6), and `settings.plugin.item` (the `0.1.5` line) — and a slot a deployment's page does not declare is simply never injected. So the card appears on this row's page on 0.1.7, on the bundle's page on 0.1.6, and in **设置 → 插件 → 插件配置** on 0.1.5.
 
-The host half's routing, the `cordis.patch.yml` pin and the credentials handling are unchanged across the whole range.
+The host half's routing, the `cordis.patch.yml` pin and the credentials handling are the same across the whole range.
 
 ### Support policy
 
-The **0.1.2 line (`v0.1.2-alpha.1` ~ `v0.1.2-rc.1`) is legacy.** This code still supports it and the CI matrix still verifies those tags, but that support ends here: **subsequent releases drop the 0.1.2 line.** If a later dsh version changes a consumed contract in a way that breaks 0.1.2, this plugin will not be adapted for 0.1.2 again — the published 0.1.2 releases stay frozen as they are. If your harness is pinned to that line, stay on `0.1.2-rc.1` (npm `latest`) or `0.1.3-alpha.2` (npm `alpha`).
+The range starts at **`v0.1.5-alpha.1`**. The `0.1.2` line (`v0.1.2-alpha.1` ~ `v0.1.2-rc.1`) and `v0.1.3-alpha.2` are **no longer supported**: this plugin version does not carry their code paths (the 0.1.2 line's module-level settings installer), its peer ranges reject them, and the CI matrix no longer verifies them. If your harness is pinned below the floor, stay on the plugin release that named that line — `0.1.3-alpha.2` (npm `alpha`) or `0.1.2-rc.1` (npm `latest`) — which remain published and frozen.
 
 ## Install
 
@@ -32,23 +32,23 @@ Requires a DSH install whose `web` profile has been initialized (start the Web G
 
 Pick the dist-tag that matches your harness:
 
-1. **npm `alpha`** (`0.1.3-alpha.2`) — the current npm build; compatible with dsh v0.1.2-alpha.1 ~ v0.1.3-alpha.2 (0.1.2 support is legacy, see above):
+1. **npm `alpha`** — the current npm build:
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
    ```
 
-2. **npm `latest`** (`0.1.2-rc.1`) — the legacy 0.1.2 line, frozen; compatible with dsh v0.1.2-alpha.1 ~ rc.1:
+2. **npm `latest`** (`0.1.2-rc.1`) — the frozen 0.1.2 line, for harnesses **below** this plugin's floor:
 
    ```bash
    dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
    ```
 
-The npm package ships the prebuilt host and client bundles, so no build step is needed on install.
+The npm package ships the prebuilt host and client bundles, so no build step is needed on install. A published build only supports the harness floor it was released against — check this README at that release's tag if you are pinning an older one.
 
 ### From source
 
-The source version — `0.1.7-alpha.1`, what the GitHub Release `v0.1.7-alpha.1` ships — is for local development:
+The source version — `0.1.7-alpha.2`, what the GitHub Release `v0.1.7-alpha.2` ships — is for local development:
 
 ```bash
 dsh plugin --profile web add .
@@ -64,7 +64,7 @@ Migration: if your profile patch already has a manual `web-search-anysearch` row
 
 ## Switch the search service from the GUI
 
-On dsh `0.1.7-alpha.1`, open **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch` → the `web-search-anysearch` row** — the row's page carries the configuration. On `0.1.6-alpha.2`, open **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`** (the bundle's own page). On `0.1.5-alpha.1` and older, open **设置 → 插件 → 插件配置 → AnySearch 搜索服务**. Either way the form's first control is the switch; saving it re-routes the very next `web_search` — no restart needed:
+On dsh `0.1.7-alpha.1`, open **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch` → the `web-search-anysearch` row** — the row's page carries the configuration. On `0.1.6-alpha.2`, open **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`** (the bundle's own page). On the `0.1.5` line, open **设置 → 插件 → 插件配置 → AnySearch 搜索服务**. Either way the form's first control is the switch; saving it re-routes the very next `web_search` — no restart needed:
 
 - **AnySearch** (default) - calls `POST {base}/v1/search` with the card's API key / endpoint fields.
 - **官方 DeepSeek 搜索** - delegates to the built-in DeepSeek search path. Its key, endpoint, model, and budget stay configured by dsh's own **Web search** (DeepSeek) card; the switch just selects that backend.

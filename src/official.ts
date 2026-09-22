@@ -119,11 +119,14 @@ function flattenConfig(config: Record<string, unknown>): Record<string, unknown>
 /**
  * The built-in provider's live config, when the deployment composes it.
  *
- * The row is located through the loader because that is the only seam whose
- * shape did not change: `entries()` gives every row, `options.id` names it, and
- * `fiber.config` is the value `apply` received. A release whose settings service
- * still carries a `get(ns)` reader is consulted as a fallback for the legacy
- * 0.1.2 line, whose rows may not be loader entries yet.
+ * The row is located through the loader, which is the seam every supported
+ * release exposes: `entries()` gives every row, `options.id` names it, and
+ * `fiber.config` is the value `apply` received — plain on the `0.1.5` line,
+ * Volatile references on `0.1.7`. A settings service that still carries a
+ * `get(ns)` reader is consulted as a second chance, so a composition that
+ * exposes the row some other way still resolves; a release whose service has no
+ * such reader simply reports the row absent, and the caller falls back to its
+ * environment and constant defaults.
  *
  * @param ctx - plugin context; `loader` and `settings` are both optional seams.
  * @returns the resolved fields, or undefined while the row is absent.
