@@ -182,25 +182,24 @@ test('apply registers the switch provider and reads the switch from the section'
   const settingsSdk = await import('@deepseek-ai/dsh-settings')
   let captured
   let installed
-  // Whether the seam's installer ever reached back with a source. A harness
-  // whose installer stays silent leaves the plugin on its composition entry,
-  // which is the documented fallback the assertion below then checks for.
-  let setSourceCalled = false
-  // The section-installer shape only exists through 0.1.6-alpha.2; 0.1.7 replaced
-  // it with the live config references `apply` receives, so this double must
-  // expose an installer only on a dsh that still has that seam. The alpha-era
-  // module export is the discriminator: it went away with the seam.
+  // The section a settings service resolves for this namespace. The plugin reads
+  // whatever the seam last handed it — the installer calls `setSource` itself
+  // when it attaches, so a test that wants a committed change reflected has to
+  // move the SERVICE, not just the thunk it handed over. This is also what makes
+  // the assertion below meaningful on every tag.
+  const resolved = {}
   const settings = settingsSdk.installSettingsSection === undefined
     ? {}
     : {
+        register(ns, _schema, options) {
+          Object.assign(resolved, options?.base)
+          return { get: () => resolved, watch: () => () => {} }
+        },
+        update(ns, patch) {
+          Object.assign(resolved, patch)
+        },
         installSection(owner, ns, schema, entry, hooks) {
-          installed = {
-            owner, ns, schema, entry,
-            hooks: {
-              ...hooks,
-              setSource: (current) => { setSourceCalled = true; hooks.setSource(current) },
-            },
-          }
+          installed = { owner, ns, schema, entry, hooks }
         },
       }
   // The built-in provider's live config, as the loader exposes it: on
@@ -231,9 +230,9 @@ test('apply registers the switch provider and reads the switch from the section'
     return new Response(JSON.stringify(ONE_RESULT), { status: 200 })
   }
   // Whichever shape this dsh uses, a committed change re-routes the next search:
-  // through the section installer where one exists, through the live reference
-  // on 0.1.7, where the installer is gone and the reference IS the source.
-  const source = () => ({ searchProvider: 'deepseek-official', apiKeyEnv: 'ANYSEARCH_API_KEY' })
+  // through the settings service where the installer attached one, through the
+  // live config reference on 0.1.7, where the installer is gone and the reference
+  // IS the source. Either way the change lands where the plugin reads.
   if (installed === undefined) {
     live.searchProvider = 'deepseek-official'
   } else {
@@ -241,20 +240,10 @@ test('apply registers the switch provider and reads the switch from the section'
     assert.equal(installed.owner, ctx)
     assert.equal(typeof installed.hooks.setSource, 'function')
     assert.equal(typeof installed.hooks.onChange, 'function')
-    installed.hooks.setSource(source)
+    settings.update('web-search-anysearch', { searchProvider: 'deepseek-official' })
   }
   await captured.search({ query: 'q' })
-  // The plugin documents one rule for the seam: it serves from the source the
-  // seam last handed it, and from its composition entry when the seam never
-  // did. Assert whichever of the two this dsh's installer actually reached —
-  // the alpha-era installer's callback goes through `ctx.inject`, which the
-  // double above cannot faithfully reproduce for every tag, and a harness whose
-  // installer stays silent is exactly the documented fallback.
-  if (installed !== undefined && !setSourceCalled) {
-    assert.equal(calls[0].url, 'https://api.anysearch.com/v1/search', 'a silent installer leaves the composition entry in force')
-  } else {
-    assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
-  }
+  assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
   assert.equal(calls[0].init.headers.authorization, 'Bearer dsk-stored')
 })
 
