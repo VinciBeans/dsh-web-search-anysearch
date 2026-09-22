@@ -92,8 +92,9 @@ test('a committed config change re-routes the next search without re-registering
   const hasLiveRef = typeof live?.get === 'function'
   const write = async (backend) => {
     if (settings !== undefined) {
-      // A release with the settings seam: the section write is the card's save.
-      await settings.update('web-search-anysearch', { searchProvider: backend })
+      // A release with the settings service: drive the seam the way a card save
+      // does. The installer the plugin found follows this and re-resolves.
+      settings.update('web-search-anysearch', { searchProvider: backend })
       return
     }
     // 0.1.7: commit into the entry's live config reference, which is what the
@@ -105,6 +106,17 @@ test('a committed config change re-routes the next search without re-registering
   recordFetch(hits)
   await ctx.web.search({ query: 'q' })
   assert.equal(hits[0], 'https://a.example/v1/search', 'the composition entry serves first')
+
+  if (settings !== undefined) {
+    // Name the cause before the derived symptom: if the seam reports no section
+    // for this namespace, the write below cannot reach the plugin and the
+    // failure would otherwise surface as a wrong URL three lines later.
+    const served = settings.describe().map(row => String(row.ns))
+    assert.ok(
+      served.includes('web-search-anysearch'),
+      `the settings service serves the plugin's namespace; it reports ${JSON.stringify(served)}`,
+    )
+  }
 
   if (settings === undefined && !hasLiveRef) {
     // Neither mechanism: the composition entry is the only source, which the
