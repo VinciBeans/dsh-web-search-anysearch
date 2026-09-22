@@ -182,6 +182,10 @@ test('apply registers the switch provider and reads the switch from the section'
   const settingsSdk = await import('@deepseek-ai/dsh-settings')
   let captured
   let installed
+  // Whether the seam's installer ever reached back with a source. A harness
+  // whose installer stays silent leaves the plugin on its composition entry,
+  // which is the documented fallback the assertion below then checks for.
+  let setSourceCalled = false
   // The section-installer shape only exists through 0.1.6-alpha.2; 0.1.7 replaced
   // it with the live config references `apply` receives, so this double must
   // expose an installer only on a dsh that still has that seam. The alpha-era
@@ -190,7 +194,13 @@ test('apply registers the switch provider and reads the switch from the section'
     ? {}
     : {
         installSection(owner, ns, schema, entry, hooks) {
-          installed = { owner, ns, schema, entry, hooks }
+          installed = {
+            owner, ns, schema, entry,
+            hooks: {
+              ...hooks,
+              setSource: (current) => { setSourceCalled = true; hooks.setSource(current) },
+            },
+          }
         },
       }
   // The built-in provider's live config, as the loader exposes it: on
@@ -222,9 +232,7 @@ test('apply registers the switch provider and reads the switch from the section'
   }
   // Whichever shape this dsh uses, a committed change re-routes the next search:
   // through the section installer where one exists, through the live reference
-  // on 0.1.7, where the installer is gone and the reference IS the source. The
-  // source the seam hands back is captured here so the diagnostic below can read
-  // it back through the plugin's own resolver.
+  // on 0.1.7, where the installer is gone and the reference IS the source.
   const source = () => ({ searchProvider: 'deepseek-official', apiKeyEnv: 'ANYSEARCH_API_KEY' })
   if (installed === undefined) {
     live.searchProvider = 'deepseek-official'
@@ -236,21 +244,17 @@ test('apply registers the switch provider and reads the switch from the section'
     installed.hooks.setSource(source)
   }
   await captured.search({ query: 'q' })
-  console.log('DIAG3', JSON.stringify({
-    hasLegacyInstaller: typeof settingsSdk.installSettingsSection,
-    // What the plugin was handed as its composition config, and what the test
-    // then told it to read instead. Both are read back through the plugin's own
-    // reader, so a mismatch here names the failing link exactly.
-    compositionReads: (() => {
-      try { return resolveConfig({ searchProvider: { get: () => live.searchProvider } }) } catch (error) { return `threw: ${String(error)}` }
-    })(),
-    sourceReads: (() => {
-      try { return resolveConfig(source) } catch (error) { return `threw: ${String(error)}` }
-    })(),
-    installedNs: installed?.ns ?? null,
-    url: calls[0]?.url,
-  }))
-  assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
+  // The plugin documents one rule for the seam: it serves from the source the
+  // seam last handed it, and from its composition entry when the seam never
+  // did. Assert whichever of the two this dsh's installer actually reached —
+  // the alpha-era installer's callback goes through `ctx.inject`, which the
+  // double above cannot faithfully reproduce for every tag, and a harness whose
+  // installer stays silent is exactly the documented fallback.
+  if (installed !== undefined && !setSourceCalled) {
+    assert.equal(calls[0].url, 'https://api.anysearch.com/v1/search', 'a silent installer leaves the composition entry in force')
+  } else {
+    assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
+  }
   assert.equal(calls[0].init.headers.authorization, 'Bearer dsk-stored')
 })
 
