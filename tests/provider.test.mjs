@@ -1,21 +1,39 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { AnySearchProvider, Config, name } from '../lib/index.js'
+import { AnySearchProvider, Config, configValueOf, name, resolveConfig } from '../lib/index.js'
 
 const BASE = 'https://api.anysearch.com'
 /** The published version the build stamps onto outbound requests. */
 const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 
 test('Config fills the apiKeyEnv default and keeps explicit values', () => {
-  assert.equal(Config({}).apiKeyEnv, 'ANYSEARCH_API_KEY')
-  assert.equal(Config({ apiKeyEnv: 'MY_KEY', baseURL: 'https://x.example' }).apiKeyEnv, 'MY_KEY')
-  assert.equal(Config({ baseURL: 'https://x.example' }).baseURL, 'https://x.example')
+  assert.equal(configValueOf(Config({}).apiKeyEnv), 'ANYSEARCH_API_KEY')
+  assert.equal(configValueOf(Config({ apiKeyEnv: 'MY_KEY', baseURL: 'https://x.example' }).apiKeyEnv), 'MY_KEY')
+  assert.equal(configValueOf(Config({ baseURL: 'https://x.example' }).baseURL), 'https://x.example')
 })
 
 test('Config defaults the switch to anysearch and keeps an explicit one', () => {
-  assert.equal(Config({}).searchProvider, 'anysearch')
-  assert.equal(Config({ searchProvider: 'deepseek-official' }).searchProvider, 'deepseek-official')
+  assert.equal(configValueOf(Config({}).searchProvider), 'anysearch')
+  assert.equal(configValueOf(Config({ searchProvider: 'deepseek-official' }).searchProvider), 'deepseek-official')
+})
+
+test('reads a Volatile config reference, the shape apply receives on dsh 0.1.7', () => {
+  // What the framework hands apply on 0.1.7-alpha.1: every declared field is a
+  // stable reference, and an edit commits a new value into it in place.
+  let backend = 'anysearch'
+  const source = {
+    searchProvider: { get: () => backend },
+    apiKey: { get: () => undefined },
+    apiKeyEnv: { get: () => 'ANYSEARCH_API_KEY' },
+    baseURL: { get: () => undefined },
+  }
+  assert.equal(resolveConfig(source).searchProvider, 'anysearch')
+  // The same object keeps answering, so a deferred read sees the committed edit.
+  backend = 'deepseek-official'
+  assert.equal(resolveConfig(source).searchProvider, 'deepseek-official')
+  // Absent fields stay absent rather than becoming undefined values.
+  assert.deepEqual(Object.keys(resolveConfig({})), [])
 })
 
 test('the provider registers under the stable id and is always available', () => {
@@ -161,38 +179,55 @@ test('the switch provider routes to the section-named backend', async () => {
 
 test('apply registers the switch provider and reads the switch from the section', async () => {
   const { apply } = await import('../lib/index.js')
+  const settingsSdk = await import('@deepseek-ai/dsh-settings')
   let captured
   let installed
-  const settings = {
-    installSection(owner, ns, schema, entry, hooks) {
-      installed = { owner, ns, schema, entry, hooks }
-    },
-    get(ns) {
-      if (ns === 'web-search-deepseek') return { baseURL: 'https://search.stored.test/v1', apiKey: 'dsk-stored' }
-      return undefined
-    },
+  // The section-installer shape only exists through 0.1.6-alpha.2; 0.1.7 replaced
+  // it with the live config references `apply` receives, so this double must
+  // expose an installer only on a dsh that still has that seam. The alpha-era
+  // module export is the discriminator: it went away with the seam.
+  const settings = settingsSdk.installSettingsSection === undefined
+    ? {}
+    : { installSection(owner, ns, schema, entry, hooks) { installed = { owner, ns, schema, entry, hooks } } }
+  // The built-in provider's live config, as the loader exposes it: on
+  // 0.1.7-alpha.1 every declared field is a Volatile reference.
+  const deepseekConfig = {
+    baseURL: { get: () => 'https://search.stored.test/v1' },
+    apiKey: { get: () => 'dsk-stored' },
+  }
+  const loader = {
+    entries: () => [{ options: { id: 'web-search-deepseek' }, fiber: { config: deepseekConfig } }],
   }
   const ctx = {
-    get: (service) => service === 'settings' ? settings : undefined,
+    get: (service) => service === 'settings' ? settings : service === 'loader' ? loader : undefined,
     inject: (tags, cb) => { cb(ctx) },
     logger: { warn: () => {} },
     web: { registerSearchProvider: (p) => { captured = p } },
   }
-  apply(ctx, Config({ searchProvider: 'anysearch' }))
+  // The composition entry as 0.1.7 hands it over: a Volatile reference whose
+  // value the framework commits into in place.
+  const live = { searchProvider: 'anysearch' }
+  apply(ctx, { searchProvider: { get: () => live.searchProvider } })
   assert.equal(captured.id, 'anysearch')
   assert.equal(captured.available(), true)
-  assert.equal(installed.ns, 'web-search-anysearch')
-  assert.equal(installed.owner, ctx)
-  assert.equal(typeof installed.hooks.setSource, 'function')
-  assert.equal(typeof installed.hooks.onChange, 'function')
 
   const calls = []
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), init })
     return new Response(JSON.stringify(ONE_RESULT), { status: 200 })
   }
-  // A committed section change (the card's save) re-routes the next search.
-  installed.hooks.setSource(() => ({ searchProvider: 'deepseek-official', apiKeyEnv: 'ANYSEARCH_API_KEY' }))
+  // Whichever shape this dsh uses, a committed change re-routes the next search:
+  // through the section installer where one exists, through the live reference
+  // on 0.1.7, where the installer is gone and the reference IS the source.
+  if (installed === undefined) {
+    live.searchProvider = 'deepseek-official'
+  } else {
+    assert.equal(installed.ns, 'web-search-anysearch')
+    assert.equal(installed.owner, ctx)
+    assert.equal(typeof installed.hooks.setSource, 'function')
+    assert.equal(typeof installed.hooks.onChange, 'function')
+    installed.hooks.setSource(() => ({ searchProvider: 'deepseek-official', apiKeyEnv: 'ANYSEARCH_API_KEY' }))
+  }
   await captured.search({ query: 'q' })
   assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
   assert.equal(calls[0].init.headers.authorization, 'Bearer dsk-stored')
@@ -207,7 +242,7 @@ test('apply falls back to the composition entry without the settings seam', asyn
     logger: { warn: () => {} },
     web: { registerSearchProvider: (p) => { captured = p } },
   }
-  apply(ctx, Config({ searchProvider: 'deepseek-official', baseURL: 'https://x.example' }))
+  apply(ctx, { searchProvider: { get: () => 'deepseek-official' }, baseURL: { get: () => 'https://x.example' } })
   const calls = []
   const savedKey = process.env.DEEPSEEK_API_KEY
   process.env.DEEPSEEK_API_KEY = 'dsk-env'
@@ -232,12 +267,11 @@ test('installs through whichever section installer the dsh build provides', asyn
   const { apply } = await import('../lib/index.js')
   const settingsSdk = await import('@deepseek-ai/dsh-settings')
   let captured
-  let warned = false
   let registeredNs
   // The alpha shape hands the section to the module-level installer, which
   // consumes a service exposing register()/watch(); the rc.1 shape rides a
-  // service method, and with neither present the plugin warns and keeps the
-  // composition entry. Either outcome keeps the provider registered.
+  // service method, and with neither present the plugin keeps the composition
+  // entry. Either outcome keeps the provider registered.
   const settings = {
     register(ns) {
       registeredNs = ns
@@ -251,16 +285,17 @@ test('installs through whichever section installer the dsh build provides', asyn
     settings,
     inject: (tags, cb) => { cb(ctx) },
     effect: () => () => {},
-    logger: { warn: () => { warned = true } },
+    logger: { warn: () => {} },
     web: { registerSearchProvider: (p) => { captured = p } },
   }
-  apply(ctx, Config({}))
+  apply(ctx, {})
   assert.equal(captured.id, 'anysearch')
-  if (settingsSdk.installSettingsSection === undefined) {
-    // rc.1: the service has no method and the module has no free function.
-    assert.equal(warned, true)
-  } else {
+  // 0.1.7-alpha.1 has neither installer: nothing registers, and the live config
+  // references apply received are the authoritative source instead.
+  if (settingsSdk.installSettingsSection !== undefined) {
     assert.equal(registeredNs, 'web-search-anysearch')
+  } else {
+    assert.equal(settings.installSection, undefined)
   }
 })
 

@@ -13,7 +13,11 @@
 export function elementsOf(node) {
   if (Array.isArray(node)) return node.flatMap(elementsOf)
   if (node === null || typeof node !== 'object') return []
-  const resolved = typeof node.type === 'function' ? node.type(node.props) : node
+  if (typeof node.type !== 'function') {
+    const children = node.props?.children
+    return children === undefined ? [node] : [node, ...elementsOf(children)]
+  }
+  const resolved = node.type(node.props)
   if (resolved === null || resolved === undefined) return []
   if (Array.isArray(resolved)) return elementsOf(resolved)
   const children = resolved.props?.children

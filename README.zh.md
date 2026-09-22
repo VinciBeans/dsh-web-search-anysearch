@@ -6,13 +6,17 @@ dsh 对模型只暴露一个固定的 `web_search` 工具，真正的后端通�
 
 ## 兼容性
 
-针对 dsh v0.1.2-alpha.1 ~ alpha.5、v0.1.2-rc.1、v0.1.3-alpha.2、v0.1.5-alpha.1 与 v0.1.6-alpha.2 共九个 tag 验证（CI 矩阵逐个验证；本插件消费的契约面在 0.1.2 ~ 0.1.5 各版本上一致，这些腿是为了守住承诺而非覆盖差异）。`0.1.6-alpha.2` 重建了 Plugins 页面，见下节。
+针对 dsh v0.1.2-alpha.1 ~ alpha.5、v0.1.2-rc.1、v0.1.3-alpha.2、v0.1.5-alpha.1、v0.1.6-alpha.2 与 v0.1.7-alpha.1 共十个 tag 验证（CI 矩阵逐个验证；本插件消费的契约面在 0.1.2 ~ 0.1.5 各版本上一致，这些腿是为了守住承诺而非覆盖差异）。`0.1.6-alpha.2` 重建了 Plugins 页面，`0.1.7-alpha.1` 又同时重建了页面与设置 seam，见下节。
 
-### Plugins 页面的两代契约
+### 设置与页面的两代契约
 
-dsh `0.1.6-alpha.2` 把 Plugins 页面从「卡片列表」改成了「bundle 自己的页面」，本插件卡片原先注册的槽位（`settings.plugin.item`）已不存在。浏览器半现在把同一张卡片注册两次：`0.1.6-alpha.2` 及以后走 `plugins.bundle.config`（以本 bundle 的包名 `@wenqi_bian/dsh-web-search-anysearch` 为 key，即 profile `dsh.profile.bundles` 里的那一项），更早版本走 `settings.plugin.item`。部署声明了哪个槽位，哪次注册才会生效——未声明的槽位不会被注入，因此同一份构建同时服务两代：0.1.6 上卡片出现在 **插件 → `@wenqi_bian/dsh-web-search-anysearch`** 这一页，0.1.5 及更早出现在 **设置 → 插件 → 插件配置**。宿主半、设置命名空间与搜索路由均未改动。
+0.1.5 之后，本插件消费的两个契约各被重建过一次，每个版本只有其中一种形状；插件自行探测，因此一份构建服务整个区间。
 
-0.1.6 上 bundle 声明本身也重要：Plugins 页面只为 profile `dsh.profile.bundles` 里列出的包渲染配置，所以请以 bundle 形式安装（`dsh plugin --profile web add …`），不要只手写一行组合行。升级插件后需**重启 `dsh web`**——浏览器 bundle 在启动时分发。
+**设置 seam。** 直到 `0.1.6-alpha.2`，插件通过 `ctx.settings.installSection(...)` 注册配置节，再通过回调拿到的 scope 读取。`0.1.7-alpha.1` 删掉了这个调用：schema 上标记 `.volatile()` 的字段会以「稳定引用」的形式交给 `apply`，`get()` 返回当前值，profile 改动由框架就地写入该引用而不再重挂插件。本插件的 schema 在构建器支持时把每个字段都标为 volatile（`.volatile()` 自 schemastery 3.18.3 起存在，0.1.7 是首个携带它的版本），读取时两种形状都认，并且只在仍有安装器的版本上注册设置节。它对「官方 DeepSeek 搜索」的委托同样改为从 loader 读取对方的实时配置，缺少该 seam 的版本再回落设置服务。
+
+**Plugins 页面。** `0.1.6-alpha.2` 把卡片列表换成「bundle 自己的配置页」；`0.1.7-alpha.1` 又改成「每一行的页面」，并把该行的实时取值与写入命令作为 owner props 交给卡片。浏览器半对它已知的三个槽位都注册——`plugins.row.config`（key 为 `<包名>#<行 id>`，0.1.7 的形式，表单由页面提供）、`plugins.bundle.config`（按包名，0.1.6）、`settings.plugin.item`（0.1.6 之前）——部署没声明的槽位根本不会被注入。于是卡片在 0.1.7 上出现在该行页面、0.1.6 上出现在 bundle 页面、0.1.5 及更早出现在 **设置 → 插件 → 插件配置**。
+
+宿主半的路由、`cordis.patch.yml` 的 pin 与凭据处理在整个区间未变。
 
 ### 支持策略
 
@@ -44,13 +48,13 @@ npm 包内附预构建的宿主与浏览器 bundle，安装无需构建步骤。
 
 ### 从源码安装
 
-源码版本 `0.1.6-alpha.2`（即 GitHub Release `v0.1.6-alpha.2` 发布的内容），用于本地开发：
+源码版本 `0.1.7-alpha.1`（即 GitHub Release `v0.1.7-alpha.1` 发布的内容），用于本地开发：
 
 ```bash
 dsh plugin --profile web add .
 ```
 
-`dsh` 以 `link:` 链接本目录，把 bundle 层追加进 `dsh.profile.bundles` 并应用 `cordis.patch.yml`（注册提供方行，**同时把 `web.searchProvider` 固定为 `anysearch`**；后应用的 patch 层仍然优先，部署方显式固定自己的值不受影响）。代码变更后用 `npm run build` 重建。**重启 `dsh web`** 生效（bundle 层的变更只在启动时应用）。只验证、不启动可先跑：
+`dsh` 以 `link:` 链接本目录，把 bundle 层追加进 `dsh.profile.bundles` 并应用 `cordis.patch.yml`（注册提供方行，**同时把 `web.searchProvider` 固定为 `anysearch`**；后应用的 patch 层仍然优先，部署方显式固定自己的值不受影响）。代码变更后用 `npm run build` 重建。0.1.6 起 Plugins 页面只为 profile 里登记过的 bundle 渲染配置，所以请以 bundle 形式安装，而不是只手写一行组合行。**重启 `dsh web`** 生效（bundle 层与分发的浏览器 bundle 都只在启动时应用）。只验证、不启动可先跑：
 
 ```sh
 dsh --profile web --dump-config
@@ -60,12 +64,12 @@ dsh --profile web --dump-config
 
 ## 在 GUI 中切换搜索服务
 
-dsh `0.1.6-alpha.2` 上打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`**（Plugins 页面里本 bundle 自己的页面，标题为包短名，说明下方就是配置表单）；`0.1.5-alpha.1` 及更早打开 **设置 → 插件 → 插件配置 → AnySearch 搜索服务**。两种入口的表单第一项都是切换开关；保存后下一次 `web_search` 立即使用新后端，无需重启：
+dsh `0.1.7-alpha.1` 上打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch` → `web-search-anysearch` 行**（配置在该行的页面上）；`0.1.6-alpha.2` 上打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`**（bundle 自己的页面）；`0.1.5-alpha.1` 及更早打开 **设置 → 插件 → 插件配置 → AnySearch 搜索服务**。各入口的表单第一项都是切换开关；保存后下一次 `web_search` 立即使用新后端，无需重启：
 
 - **AnySearch**（默认）——按卡片上的 API Key / 接口地址调用 `POST {base}/v1/search`。
 - **官方 DeepSeek 搜索**——委托给内置的 DeepSeek 搜索路径；其 key、端点、模型与预算仍由 dsh 自带的 **Web search (DeepSeek)** 卡片配置，本开关只做后端选择。
 
-卡片上的 API key 经凭据域写入（默认引用 `ANYSEARCH_API_KEY`，解析顺序 `$DSH_HOME/.credentials.yaml` > `$DSH_HOME/.env` > 继承环境），永不落进设置文件。匿名请求同样可用。
+卡片上的 API key 经凭据域写入（默认引用 `ANYSEARCH_API_KEY`，解析顺序 `$DSH_HOME/.credentials.yaml` > `$DSH_HOME/.env` > 继承环境）。表单上的 **API Key** 字段则是本条目的普通配置字段，输入的值会存进 profile patch；两者并非互斥，见下节。
 
 ## 配置文件方式（仍然有效）
 
@@ -98,8 +102,10 @@ DSH_WEB_SEARCH_PROVIDER=anysearch dsh web
 ## 已知限制
 
 - **仅通用搜索。** dsh seam 请求只携带 `query` 与 `maxResults`；AnySearch 的垂直领域（`finance.quote` 等）、其必填 params、`zone`/`language` 以及 `/v1/extract` 端点无法经 `web_search` 触达。
-- 配置表单需要 dsh web GUI 组合本插件（浏览器半部经 `dsh.client` 分发）**且**本 bundle 在 profile 的 `dsh.profile.bundles` 里——0.1.6 上表单就是 bundle 自己的页面，只注册行、未登记 bundle 的 profile 看不到表单。headless profile 下功能完整，但只能走配置文件切换。
+- 配置表单需要 dsh web GUI 组合本插件（浏览器半部经 `dsh.client` 分发）**且**本 bundle 在 profile 的 `dsh.profile.bundles` 里——0.1.6 起表单属于 bundle 页或行页，只注册行、未登记 bundle 的 profile 看不到表单。headless profile 下功能完整，但只能走配置文件切换。
+- `0.1.7-alpha.1` 上，从 profile 编辑器提交的配置改动经 volatile 引用直接送达运行中的插件，下一次 `web_search` 即生效，无需重启。schema 构建器无法标记 volatile 的版本（schemastery < 3.18.3，即 dsh ≤ 0.1.6）仍按原路经设置节解析。
 - 选中官方后端时，其可用性跟随内置 DeepSeek 搜索设置（需要 key 与合法端点）；AnySearch 始终支持匿名。内置插件 `@deepseek-ai/dsh-web-search-deepseek` 是**可选 peer**，按需动态加载：未组合该插件的部署仍能加载本插件并使用 AnySearch，官方一侧报告不可用。
+- API Key 有两种写入方式，持久化位置不同。表单上的 **API Key** 字段就是本 profile 条目的普通配置字段：在这里输入的值会保存进 profile patch（`config.apiKey`，经线上由 `secret` role 脱敏）。它并非必需——留空即由插件按 `apiKeyEnv`（默认 `ANYSEARCH_API_KEY`）经凭据域解析（`$DSH_HOME/.credentials.yaml` > `$DSH_HOME/.env` > 继承环境），推荐走这条路径。两种方式都允许匿名请求。
 - 搜索词会发送到 `https://api.anysearch.com`（可用 `ANYSEARCH_API_BASE_URL` 或卡片上的接口地址覆盖）；返回内容视为不可信外部数据。
 
 ## License

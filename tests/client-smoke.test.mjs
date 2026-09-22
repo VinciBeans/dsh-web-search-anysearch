@@ -53,13 +53,22 @@ function loadBundle() {
   return registration.factory((specifier) => {
     // The only runtime module-table request the card bundle makes.
     assert.equal(specifier, 'react')
-    // Enough of React's shape to render an element and to drive the card's
-    // mount-time effects: the returned tree is read back by the caller.
+    // The bundle's components are invoked directly rather than through a
+    // reconciler, so this stub supplies only what the branches under test read:
+    // `createElement` for the trees, `useRef`/`useEffect` for the mount-time
+    // discard the card installs on every generation, and a `useState` that
+    // always reports its INITIAL value — enough to render a branch whose first
+    // state is the one under test, but not to carry an edit across renders.
+    // Drafting therefore still needs a real renderer; a branch that depends on
+    // it fails loudly here rather than asserting something untrue.
     return {
-      createElement: (type, props, ...children) => ({ type, props: { ...props, children: children.length === 1 ? children[0] : children } }),
+      createElement: (type, props, ...children) => ({
+        type,
+        props: { ...props, children: children.length === 1 ? children[0] : children },
+      }),
       useRef: value => ({ current: value }),
       useState: initial => [initial, () => {}],
-      useEffect: effect => { effect() },
+      useEffect: (effect) => { effect(); return () => {} },
     }
   })
 }
@@ -75,18 +84,24 @@ function applyWithDeclaredSlots(declared) {
   const exports = loadBundle()
   const registered = new Map()
   const injected = []
+  // The settings scope the 0.1.6 and earlier page generations reach through the
+  // service registry. A 0.1.7 deployment has none: its page hands the card the
+  // entry's form as owner props instead.
+  const scope = {
+    bind: ({ namespace }) => ({
+      getSnapshot: () => ({ status: 'ready', writable: true, value: { searchProvider: 'anysearch' } }),
+      subscribe: () => () => {},
+      set: async () => true,
+      unset: async () => true,
+    }),
+  }
   const ctx = {
+    // The card reaches the settings scope through the service registry, not as
+    // a bare property: a bare read of a service outside `inject` throws.
+    get: (name) => name === 'settingsScope' ? scope : undefined,
     locale: {
       register: () => {},
       bind: () => key => key,
-    },
-    settingsScope: {
-      bind: ({ namespace }) => ({
-        getSnapshot: () => ({ status: 'ready', writable: true, value: { searchProvider: 'anysearch' } }),
-        subscribe: () => () => {},
-        set: async () => {},
-        unset: async () => {},
-      }),
     },
     remote: {
       credentials: {
@@ -118,12 +133,23 @@ test('client bundle registers and mounts the card without throwing', () => {
   const { exports, registered, injected } = applyWithDeclaredSlots([
     'settings.plugin.item',
     'plugins.bundle.config',
+    'plugins.row.config',
   ])
   assert.equal(exports.name, 'web-search-anysearch')
-  assert.deepEqual(exports.inject, ['slots', 'locale', 'remote', 'remote.credentials', 'settingsScope'])
-  // Both page generations are attempted; the undeclared one is what a given
-  // deployment skips.
-  assert.deepEqual(injected, ['plugins.bundle.config', 'settings.plugin.item'])
+  // No version-specific settings service is required: a page that owns the form
+  // hands it down as owner props, and the pages that do not are reached through
+  // the scope the plugin probes for itself. Declaring a service that 0.1.7
+  // removed would leave the whole browser half pending.
+  assert.deepEqual(exports.inject, ['slots', 'locale', 'remote', 'remote.credentials'])
+  // Every page generation is attempted; the ones a deployment does not declare
+  // are what its page skips.
+  assert.deepEqual(injected, ['plugins.row.config', 'plugins.bundle.config', 'settings.plugin.item'])
+
+  // 0.1.7-alpha.1: one row's configuration, keyed <package>#<row id>.
+  const row = registered.get('plugins.row.config')
+  assert.equal(row.options.key, `${PACKAGE_NAME}#web-search-anysearch`)
+  assert.equal(row.options.locale, 'web-search-anysearch')
+  assert.equal(typeof row.options.inject, 'function')
 
   // 0.1.6-alpha.2: the bundle's own configuration, keyed by package name.
   const modern = registered.get('plugins.bundle.config')
@@ -142,6 +168,9 @@ test('client bundle registers and mounts the card without throwing', () => {
 test('a deployment declaring only one page generation registers only that one', () => {
   const modernOnly = applyWithDeclaredSlots(['plugins.bundle.config'])
   assert.deepEqual([...modernOnly.registered.keys()], ['plugins.bundle.config'])
+
+  const rowOnly = applyWithDeclaredSlots(['plugins.row.config'])
+  assert.deepEqual([...rowOnly.registered.keys()], ['plugins.row.config'])
 
   const legacyOnly = applyWithDeclaredSlots(['settings.plugin.item'])
   assert.deepEqual([...legacyOnly.registered.keys()], ['settings.plugin.item'])
@@ -204,4 +233,51 @@ test('the card renders the summary and page views the 0.1.6 page asks for', () =
   assert.equal(elementsOf(legacy)[0].type, 'li', 'the legacy card is a list item in the page list')
   assert.equal(byClass(legacy, 'dswa-header').props['aria-expanded'], false)
   assert.equal(textOf(byClass(legacy, 'dswa-description')), 'description')
+})
+
+test('the card binds to the form the 0.1.7 page supplies', () => {
+  const { registered } = applyWithDeclaredSlots(['plugins.row.config'])
+  const row = registered.get('plugins.row.config')
+  const form = {
+    state: {
+      status: 'ready',
+      writable: true,
+      revision: 7,
+      value: { searchProvider: 'anysearch', baseURL: 'https://api.anysearch.com' },
+    },
+    mutate: async () => true,
+  }
+  const formProps = {
+    t: key => key,
+    // `AnySearchCard` calls this hook unconditionally (hooks have no conditional
+    // form), so this page generation's card necessarily touches the injected
+    // face — it just must draw nothing from what the hook returns.
+    useAnysearchCard: () => ({}),
+    // The injected actions, by contrast, must never be reached on a page that
+    // supplies its own form, so each throws. That they are not reached is what
+    // the renders below prove.
+    edit: () => { throw new Error('the form-backed card stages its own drafts') },
+    resetField: () => { throw new Error('the form-backed card stages its own drafts') },
+    save: () => { throw new Error('the form-backed card saves through the form') },
+    discard: () => { throw new Error('the form-backed card stages its own drafts') },
+  }
+
+  // The summary view is settled before any hook, so the stub can check it.
+  assert.equal(row.component({ ...formProps, view: 'summary', form }).props.children, 'description')
+
+  // An entry the Host does not serve renders nothing rather than a form nothing
+  // backs; that check too happens before the draft state is claimed. The
+  // rendered form itself stages its drafts in `useState`, so exercising it needs
+  // a real React runtime, which this smoke test deliberately does not ship — the
+  // host integration test in `settings.test.mjs` covers the write path.
+  for (const status of ['loading', 'unavailable']) {
+    assert.equal(
+      row.component({ ...formProps, view: 'page', form: { ...form, state: { ...form.state, status } } }),
+      null,
+    )
+  }
+
+  // The contribution is keyed the way the 0.1.7 page dispatches a row's
+  // configuration.
+  assert.equal(row.options.key, `${PACKAGE_NAME}#web-search-anysearch`)
 })

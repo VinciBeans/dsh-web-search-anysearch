@@ -2,6 +2,75 @@
 
 All notable changes to this project are documented here.
 
+## [0.1.7-alpha.1] - 2026-09-21
+
+Version aligned with the harness release this build is verified against
+(`dsh-v0.1.7-alpha.1`, pin `c36a83ff6b`), following the sibling plugins'
+convention of naming each release after the dsh tag it targets.
+
+This release needed real adaptation on both halves: 0.1.7 rebuilt the settings
+seam on the host side and the Plugins page on the browser side.
+
+### Fixed
+
+- **The host half reads live config again — it had been frozen at the values
+  `apply` received.** 0.1.7 deleted `ctx.settings.installSection`, the call the
+  plugin used to swap its composition entry for the settings document's resolved
+  section, and replaced it with Volatile config references: a schema field
+  marked `.volatile()` arrives in `apply` as a stable reference whose `get()`
+  returns the current value, and the framework commits a profile edit into that
+  reference in place. The plugin now marks every field volatile where the
+  installed builder supports it and reads each field AT THE MOMENT IT IS USED —
+  unwrapping once at `apply` time, as the first cut did, would have snapshotted
+  the composition values and never seen an edit.
+- **The browser half boots again on 0.1.7, and registers where its page
+  dispatches.** `ctx.settingsScope` was removed (renamed `configForms`), and
+  because it stayed in the static `inject` list the whole browser half hung
+  pending — which the client boot audit turns into a failed web boot, not the
+  silent no-op of the previous break. The plugin no longer declares a
+  version-specific settings service at all: the page that owns the form passes
+  it down as owner props, and the pre-0.1.7 pages are reached through a runtime
+  service lookup (`ctx.get`) that cannot make the boot audit fail. The card
+  registers into `plugins.row.config` keyed `<package>#<row id>` — the key
+  0.1.7's page dispatches a row's configuration by — and the row page supplies
+  `form.state` and `form.mutate`, so the card submits every staged field through
+  the Host's revision-fenced write queue.
+- **The official DeepSeek delegation reads that plugin's live entry.** It used
+  `ctx.settings.get('web-search-deepseek')`, a reader that no longer exists.
+  It now reads the row's resolved config from the loader (`options.id` +
+  `fiber.config`), which works on every supported release and follows a
+  committed edit, and falls back to the settings service where one still exists.
+
+### Changed
+
+- **Peer ranges cover the 0.1.7 line.** `^0.1.6-alpha.2` does not satisfy
+  `0.1.7-alpha.1` under npm's prerelease semantics, so every `@deepseek-ai/dsh-*`
+  peer now reads
+  `^0.1.2-alpha.1 || ^0.1.3-alpha.1 || ^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1`.
+- **The section installer is feature-detected rather than assumed.** A release
+  with neither `ctx.settings.installSection` nor the alpha-era
+  `installSettingsSection` registers nothing, and the live config reference is
+  the authoritative source. `.volatile()` itself is probed too, because it
+  arrived in schemastery 3.18.3 (shipped by 0.1.7) and calling it on 3.18.2
+  would not compile a schema at all.
+
+### Verified
+
+- **dsh v0.1.7-alpha.1** (pin `c36a83ff6b`), against freshly built harness type
+  artifacts. `typecheck`, `build` and **24/24 tests** pass. Three of those run
+  against the real dsh service stack rather than doubles, including the two that
+  matter here: a composed plugin serves AnySearch from its config, and
+  committing a new value into the entry's live reference re-routes the next
+  search with no re-registration — the test writes through the framework's own
+  Volatile protocol, so it exercises the mechanism the profile editor uses.
+- The bundle/loader chain is unchanged: `dsh.bundle.patch` is still honored in
+  the same layer order (0.1.7 only widened it to `string | string[]`),
+  `dsh.profile.bundles` keeps its shape, the new `web-app/presets/*.patch.yml`
+  are that bundle's own extra patches rather than a profile concept, and
+  `dsh.client` plus the `window.__ModuleLoader__.load({id, factory})` boot
+  contract are byte-identical. `web.searchProvider` / `fetchProvider` still pin
+  the seam, so `cordis.patch.yml` needs no change.
+
 ## [0.1.6-alpha.2] - 2026-09-18
 
 Version aligned with the harness release this build is verified against
@@ -179,6 +248,7 @@ it is verified against (v0.1.2-alpha.1 ~ rc.1).
 - Build now emits both the host bundle (`lib/index.js`) and the client bundle
   (`lib/client.js`); `exports["./client"]` added.
 
+[0.1.7-alpha.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.7-alpha.1
 [0.1.6-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.6-alpha.2
 [0.1.5-alpha.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.5-alpha.1
 [0.1.3-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.3-alpha.2

@@ -91,18 +91,61 @@ interface DeepSeekModuleLike {
   DEEPSEEK_DEFAULT_MAX_USES?: unknown
 }
 
+/** Whether a value is a config reference (a Volatile field) rather than a value. */
+function isConfigRef(value: unknown): value is { get(): unknown } {
+  return typeof value === 'object' && value !== null
+    && typeof (value as { get?: unknown }).get === 'function'
+}
+
 /**
- * The built-in provider's section, when the deployment composes it.
- * @param ctx - plugin context; `settings` is an optional seam.
- * @returns the resolved section, or undefined while absent.
+ * Flatten one loader row's config, reading every config reference it holds.
+ *
+ * dsh `0.1.7-alpha.1` hands a plugin its config as Volatile references, so the
+ * built-in provider's live values live in `entry.fiber.config`; earlier releases
+ * keep plain values in the settings document, read through the settings seam.
+ * Both are normalized here so the projection below sees one shape.
+ * @param config - one row's config, plain or reference-shaped.
+ * @returns the row's fields with every reference read.
+ */
+function flattenConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const fields: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(config)) {
+    if (value === undefined) continue
+    fields[key] = isConfigRef(value) ? value.get() : value
+  }
+  return fields
+}
+
+/**
+ * The built-in provider's live config, when the deployment composes it.
+ *
+ * The row is located through the loader because that is the only seam whose
+ * shape did not change: `entries()` gives every row, `options.id` names it, and
+ * `fiber.config` is the value `apply` received. A release whose settings service
+ * still carries a `get(ns)` reader is consulted as a fallback for the legacy
+ * 0.1.2 line, whose rows may not be loader entries yet.
+ *
+ * @param ctx - plugin context; `loader` and `settings` are both optional seams.
+ * @returns the resolved fields, or undefined while the row is absent.
  */
 export function deepseekSection(ctx: Context): Record<string, unknown> | undefined {
+  const loader = ctx.get('loader') as {
+    entries?: () => Iterable<{ options?: { id?: string }; fiber?: { config?: unknown } }>
+  } | undefined
+  if (typeof loader?.entries === 'function') {
+    for (const entry of loader.entries()) {
+      if (entry.options?.id !== DEEPSEEK_SEARCH_SETTINGS_NAMESPACE) continue
+      const config = entry.fiber?.config
+      if (typeof config === 'object' && config !== null && !Array.isArray(config)) {
+        return flattenConfig(config as Record<string, unknown>)
+      }
+    }
+  }
   const settings = ctx.get('settings') as { get?: (ns: string) => unknown } | undefined
   if (typeof settings?.get !== 'function') return undefined
   const section = settings.get(DEEPSEEK_SEARCH_SETTINGS_NAMESPACE)
-  return typeof section === 'object' && section !== null && !Array.isArray(section)
-    ? section as Record<string, unknown>
-    : undefined
+  if (typeof section !== 'object' || section === null || Array.isArray(section)) return undefined
+  return flattenConfig(section as Record<string, unknown>)
 }
 
 /** Project the installed module's exported defaults, falling back to the local mirrors. */

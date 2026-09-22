@@ -3,20 +3,24 @@
  * endpoint, and the AnySearch key — written through the credentials domain,
  * never into the settings section, so the literal never rides a response.
  *
- * One component serves two page generations. `view: 'page'` is the
- * configuration body the 0.1.6-alpha.2 Plugins page mounts on this bundle's
- * page: the host form owns the title, the read-only notice, and the save
- * control, so this body renders only its controls. `view: 'summary'` is the
- * one-liner the page places beside them. A page generation that declares no
- * view at all is the pre-0.1.6 card, which this component then renders as a
- * disclosure owning its own save and discard.
+ * Three page generations render this component, and it answers each with the
+ * shape that generation supplies:
+ *
+ * - `form` present (`0.1.7-alpha.1`): the page owns the entry's values and its
+ *   write command, so the card stages a draft and saves through `form.mutate`.
+ * - `view: 'page'` without a form (`0.1.6-alpha.2`): the card reads the settings
+ *   seam itself through the injected face and owns its save control.
+ * - no `view` (pre-0.1.6): a disclosure card with its own chrome, save and
+ *   discard.
+ *
+ * `view: 'summary'` is the one-liner every page generation may ask for.
  * @module @wenqi_bian/dsh-web-search-anysearch/client/card
  */
 
 import * as React from 'react'
 import type { AnySearchCardState } from './controller.ts'
 import type { AnySearchLocaleKey } from './locales.ts'
-import type { PluginConfigViewProps } from './index.ts'
+import type { PageConfigForm, PluginConfigViewProps } from './index.ts'
 import { classes as css } from './styles.ts'
 
 /** Props the renderer binds for the anysearch card. */
@@ -35,33 +39,154 @@ export interface AnySearchCardProps {
   discard: () => void
   /** Which view the page asks for; absent on the pre-0.1.6 card, which owns its own chrome. */
   view?: PluginConfigViewProps['view']
+  /**
+   * The entry's live values and write command, supplied by a page generation
+   * that owns the configuration form. Absent where the card reaches the
+   * settings seam itself.
+   */
+  form?: PluginConfigViewProps['form']
 }
 
 /**
  * Render the AnySearch configuration.
- * @param props - locale copy, the card snapshot, its form actions, and the view the page asked for.
+ * @param props - locale copy, the injected card face, and the view and form the page supplied.
  * @returns the requested view.
  */
 export function AnySearchCard(props: AnySearchCardProps) {
+  // Unconditional: the injected face's hook is a selector the renderer binds,
+  // and only the branches without a page-owned form read it.
   const state = props.useAnysearchCard(snapshot => snapshot)
-  // Leaving the page drops every staged edit — the 0.1.6 page gives an entry no
-  // discard gesture, so unmount is the only point at which one can be offered.
-  // The ref keeps the effect at mount-only while still calling the live action.
+  // Leaving the page drops every staged edit — a page that gives an entry no
+  // discard gesture is left with unmount as the only point at which one can be
+  // offered. The ref keeps the effect at mount-only while calling the live action.
   const discard = React.useRef(props.discard)
   discard.current = props.discard
   React.useEffect(() => () => { discard.current() }, [])
   if (props.view === 'summary') return <>{props.t('description')}</>
-  if (!state.available) return null
+  // A page that owns the form is authoritative for availability: while the Host
+  // has not served the entry there is nothing to configure, so nothing renders.
+  // The check precedes the draft state so an unserved entry claims no slots.
+  if (props.form !== undefined) {
+    return props.form.state.status === 'ready' ? <FormCard {...props} form={props.form} /> : null
+  }
   if (props.view === 'page') {
+    if (!state.available) return null
     return (
       <>
-        <CardBody {...props} state={state} disabled={!state.writable} />
+        <CardBody
+          t={props.t}
+          state={state}
+          disabled={!state.writable}
+          edit={props.edit}
+          resetField={props.resetField}
+        />
         <CardFooter {...props} state={state} />
       </>
     )
   }
   return <LegacyCard {...props} state={state} />
 }
+
+/** Props of the form-backed card. */
+interface FormCardProps extends AnySearchCardProps {
+  /** The entry's live values and write command. */
+  form: PageConfigForm
+}
+
+/**
+ * The configuration body on a page that supplies the entry's form.
+ *
+ * The page owns the form: `form.state` is the value it read for this render,
+ * and `form.mutate` is the revision-fenced write whose answer says whether the
+ * Host accepted it. The draft therefore lives here — the card decides what a
+ * save sends — and a landed write clears it, so the page's next render re-seeds
+ * every control from the Host.
+ * @param props - locale copy, the page's form, and the card's own actions.
+ * @returns the controls with this card's save control.
+ */
+function FormCard(props: FormCardProps) {
+  const [drafts, setDrafts] = React.useState<ReadonlyMap<string, string>>(() => new Map())
+  const [saving, setSaving] = React.useState(false)
+  const [failed, setFailed] = React.useState(false)
+  const { state } = props.form
+  const value = state.value ?? {}
+  const draftOf = (field: string): string => drafts.get(field) ?? textOf(value[field])
+  const dirty = drafts.size > 0
+  // A save that did not land keeps its drafts, so the user can correct them.
+  const edit = (field: string, text: string): void => {
+    setDrafts((current) => new Map(current).set(field, text))
+    setFailed(false)
+  }
+  const reset = (field: string): void => {
+    // An empty draft is the clear the Host resolves back to the base layer.
+    setDrafts((current) => new Map(current).set(field, ''))
+    setFailed(false)
+  }
+  const save = (): void => {
+    const ops = [...drafts].map(([field, text]) => ({ op: 'set' as const, path: [field], value: text }))
+    setSaving(true)
+    setFailed(false)
+    void props.form.mutate(ops, state.revision)
+      .then((landed) => {
+        if (landed) setDrafts(new Map())
+        setSaving(false)
+        setFailed(!landed)
+      })
+      .catch(() => { setSaving(false); setFailed(true) })
+  }
+
+  const cardState: AnySearchCardState = {
+    available: true,
+    writable: state.writable,
+    dirty,
+    invalid: false,
+    saving,
+    failed,
+    backend: {
+      // The switch always names a backend; an absent field reads as the default.
+      text: draftOf('searchProvider') || ANYSEARCH_BACKEND_DEFAULT,
+      overridden: Object.hasOwn(value, 'searchProvider'),
+      invalid: false,
+    },
+    baseURL: { text: draftOf('baseURL'), overridden: Object.hasOwn(value, 'baseURL'), invalid: false },
+    apiKey: { text: draftOf('apiKey'), overridden: false, invalid: false },
+    // The credential badge lives on the settings seam, which this page
+    // generation does not expose to the card; the control still writes the key.
+    apiKeyConfigured: false,
+    apiKeyWritable: state.writable,
+  }
+
+  return (
+    <>
+      <CardBody
+        t={props.t}
+        state={cardState}
+        disabled={!state.writable}
+        edit={edit}
+        resetField={reset}
+      />
+      <div className={css.footer}>
+        {failed ? <p className={css.failed} role="status">{props.t('saveFailed')}</p> : null}
+        <button
+          type="button"
+          className={css.save}
+          disabled={!dirty || saving}
+          onClick={save}
+        >
+          {props.t(saving ? 'saving' : 'save')}
+        </button>
+      </div>
+    </>
+  )
+}
+
+/** Read one section value as control text. */
+function textOf(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+/** The backend a section with no explicit switch value serves. */
+const ANYSEARCH_BACKEND_DEFAULT = 'anysearch'
 
 /** Props of the form's save control. */
 interface CardFooterProps extends AnySearchCardProps {
@@ -143,7 +268,13 @@ function LegacyCard(props: LegacyCardProps) {
         ? (
           <div className={css.body}>
             {!state.writable ? <p className={css.readOnly} role="status">{props.t('readOnly')}</p> : null}
-            <CardBody {...props} disabled={!state.writable} />
+            <CardBody
+              t={props.t}
+              state={state}
+              disabled={!state.writable}
+              edit={props.edit}
+              resetField={props.resetField}
+            />
             <div className={css.footer}>
               {state.failed ? <p className={css.failed} role="status">{props.t('saveFailed')}</p> : null}
               <button
@@ -171,17 +302,24 @@ function LegacyCard(props: LegacyCardProps) {
 }
 
 /** Props of the configuration controls. */
-interface CardBodyProps extends AnySearchCardProps {
+interface CardBodyProps {
+  /** Translate a dictionary key of this card's namespace. */
+  t: (key: AnySearchLocaleKey) => string
   /** The card's current snapshot. */
   state: AnySearchCardState
   /** Whether the Host settings document accepts writes. */
   disabled: boolean
+  /** Stage draft text for one field. */
+  edit: (field: string, text: string) => void
+  /** Stage a clear, so saving lets the field re-inherit the composition layer. */
+  resetField: (field: string) => void
 }
 
 /**
  * The configuration controls themselves, without any page chrome: the backend
- * switch, the endpoint, and the write-only API key.
- * @param props - locale copy, the card's form actions, and the field state.
+ * switch, the endpoint, and the write-only API key. Every page generation
+ * stages through the same two actions, so only how a save is submitted differs.
+ * @param props - locale copy, the field state, and the staging actions.
  * @returns the card's fields.
  */
 function CardBody(props: CardBodyProps) {

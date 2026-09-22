@@ -54,7 +54,7 @@ export function createSnapshotStore<T>(initial: T): SnapshotStore<T> & { set(nex
 
 /** One namespace's mirror view, as the client settings scope serves it. */
 export interface SettingsScopeSnapshot {
-  status: string
+  status: 'loading' | 'ready' | 'unavailable'
   value?: Record<string, unknown>
   base?: Record<string, unknown>
   user?: Record<string, unknown>
@@ -62,12 +62,19 @@ export interface SettingsScopeSnapshot {
   writable: boolean
 }
 
-/** The bound scope a card stages over (structural subset of the client service). */
+/**
+ * The bound scope a card stages over. The plugin reaches one through whichever
+ * seam the installed dsh offers — `ctx.configForms.get(namespace)` on
+ * `0.1.7-alpha.1`, `ctx.settingsScope.bind({ namespace })` before it — and the
+ * newer one is adapted to this shape in `client/index.ts`. Writes report
+ * whether the Host accepted the value, which is the only reliable signal: a
+ * refused write leaves the document unchanged.
+ */
 export interface SettingsScope {
   getSnapshot(): SettingsScopeSnapshot
   subscribe(fn: () => void): () => void
-  set(field: string, value: unknown): Promise<void>
-  unset(field: string): Promise<void>
+  set(field: string, value: unknown): Promise<boolean>
+  unset(field: string): Promise<boolean>
 }
 
 /** Credentials-domain answers (structural subset of the client remote). */
@@ -155,15 +162,17 @@ export class AnySearchCardController {
   private failed = false
 
   /**
-   * @param scope - the bound settings scope for the `web-search-anysearch` namespace.
+   * @param scope - the bound settings scope for the `web-search-anysearch`
+   *   namespace, or undefined while the installed dsh exposes no such seam and
+   *   the page supplies no config form. Without one the card renders nothing.
    * @param credentials - the credentials domain the section's reference addresses.
    */
   constructor(
-    private readonly scope: SettingsScope,
+    private readonly scope: SettingsScope | undefined,
     private readonly credentials: CredentialsRemote,
   ) {
     this.credential = { ref: this.apiKeyRef(), configured: false, writable: true }
-    scope.subscribe(() => { void this.readCredential() })
+    scope?.subscribe(() => { void this.readCredential() })
     void this.readCredential()
   }
 
@@ -206,8 +215,13 @@ export class AnySearchCardController {
     this.snapshot.set({ ...this.shell(), ...this.fields() })
   }
 
+  /** The scope's current view, or an unserved one while no seam is attached. */
+  private view(): SettingsScopeSnapshot {
+    return this.scope?.getSnapshot() ?? { status: 'unavailable', writable: false }
+  }
+
   private shell(): Pick<AnySearchCardState, 'available' | 'writable' | 'dirty' | 'invalid' | 'saving' | 'failed'> {
-    const snapshot = this.scope.getSnapshot()
+    const snapshot = this.view()
     const plan = this.plan()
     return {
       available: snapshot.status === 'ready',
@@ -252,15 +266,15 @@ export class AnySearchCardController {
   }
 
   private sectionValue(field: string): unknown {
-    return this.scope.getSnapshot().value?.[field]
+    return this.view().value?.[field]
   }
 
   private baseValue(field: string): unknown {
-    return this.scope.getSnapshot().base?.[field]
+    return this.view().base?.[field]
   }
 
   private userLayer(): Record<string, unknown> | undefined {
-    return this.scope.getSnapshot().user
+    return this.view().user
   }
 
   private stored(field: string): boolean {
@@ -311,14 +325,26 @@ export class AnySearchCardController {
     return field === 'searchProvider' ? this.backendTextOf(value) : typeof value === 'string' ? value : ''
   }
 
+  /**
+   * Write one field and report whether the Host holds the staged value.
+   *
+   * The scope answers directly on `0.1.7-alpha.1` (`form.mutate` resolves to
+   * whether the write was accepted), and its answer is preferred: a refused
+   * write is not the same as an accepted one whose read-back disagrees. Where
+   * the seam predates that answer, the section is read back instead.
+   */
   private async store(field: string, value: unknown): Promise<boolean> {
-    await this.scope.set(field, value)
-    return this.sectionValue(field) === value
+    const scope = this.scope
+    if (scope === undefined) return false
+    const accepted = await scope.set(field, value)
+    return accepted || this.sectionValue(field) === value
   }
 
   private async clear(field: string): Promise<boolean> {
-    await this.scope.unset(field)
-    return !this.stored(field)
+    const scope = this.scope
+    if (scope === undefined) return false
+    const accepted = await scope.unset(field)
+    return accepted || !this.stored(field)
   }
 
   private async writeKey(value: string): Promise<boolean> {
@@ -328,7 +354,7 @@ export class AnySearchCardController {
   }
 
   private apiKeyRef(): string {
-    const declared = this.scope.getSnapshot().value?.apiKeyEnv
+    const declared = this.view().value?.apiKeyEnv
     return typeof declared === 'string' && declared.length > 0 ? declared : ANYSEARCH_DEFAULT_API_KEY_ENV
   }
 
