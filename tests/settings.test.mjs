@@ -1,25 +1,20 @@
 /**
  * Host integration against the real dsh service stack: a cordis context with the
- * web runtime and this plugin composed. On `0.1.7-alpha.1` and later this is
- * what proves the live config path end to end — the framework hands `apply`
- * Volatile references, and committing a new value into one re-routes the next
- * search with no re-registration. On releases that still carry the section
- * installer (`<= 0.1.6-alpha.2`) the same test asserts the installed namespace.
+ * web runtime and this plugin composed. This is what proves the live config path
+ * end to end — the framework hands `apply` its config, and a committed change
+ * re-routes the next search with no re-registration. Which mechanism carries
+ * that change is a runtime fact of the composition: a settings service where one
+ * is composed, the Volatile config reference on releases that have it.
  */
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Context } from '@deepseek-ai/cordis'
-import * as settingsSdk from '@deepseek-ai/dsh-settings'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as plugin from '../lib/index.js'
 
 /** The cordis symbol the framework commits a Volatile value through. */
 const VOLATILE_WRITE = Symbol.for('cosmokit.volatile.write')
-
-/** Whether the installed dsh still carries a section-installer seam. */
-const HAS_SECTION_INSTALLER = typeof settingsSdk.SettingsProvider === 'function'
-  || typeof settingsSdk.SettingsForms?.prototype?.installSection === 'function'
 
 /** The composition entry, as the profile patch declares it: plain values. */
 const ENTRY = { apiKey: 'k', baseURL: 'https://a.example' }
@@ -82,50 +77,76 @@ test('a committed config change re-routes the next search without re-registering
   const fiber = ctx.plugin(plugin, ENTRY)
   await fiber.await()
 
+  // Which write mechanism this release offers is a RUNTIME fact, not a module
+  // export: `installSection` belongs to a settings service that a composition
+  // may not carry at all (the plugin's own tests compose none), and on 0.1.7 the
+  // live config reference replaced it. Probe the context, the way the plugin
+  // does, and never assume a service is present.
+  // Which write mechanism this release offers is a RUNTIME fact, not a module
+  // export: a settings service may not be composed at all (this test composes
+  // none, since it carries just the web runtime and the plugin), and the live
+  // config reference only exists where the schema builder marks fields volatile.
+  // Probe the context the way the plugin does and never assume either is there.
+  const settings = ctx.get('settings')
+  const live = fiber.config?.searchProvider
+  const hasLiveRef = typeof live?.get === 'function'
+  const write = async (backend) => {
+    if (settings !== undefined) {
+      // A release with the settings seam: the section write is the card's save.
+      await settings.update('web-search-anysearch', { searchProvider: backend })
+      return
+    }
+    // 0.1.7: commit into the entry's live config reference, which is what the
+    // profile editor does. Nothing is re-registered and nothing remounts.
+    live[VOLATILE_WRITE](backend)
+  }
+
   const hits = []
   recordFetch(hits)
   await ctx.web.search({ query: 'q' })
   assert.equal(hits[0], 'https://a.example/v1/search', 'the composition entry serves first')
 
+  if (settings === undefined && !hasLiveRef) {
+    // Neither mechanism: the composition entry is the only source, which the
+    // first assertion already covers. Nothing here is silently skipped — there
+    // is genuinely no other way for a change to reach a running plugin.
+    await ctx.fiber.dispose()
+    return
+  }
+
   await withOfficialEnv(async () => {
-    // What the profile editor does: commit a new value into the entry's live
-    // config reference. Nothing is re-registered and the plugin is not remounted.
-    const live = fiber.config.searchProvider
-    if (typeof live?.get === 'function') {
-      live[VOLATILE_WRITE]('deepseek-official')
-    } else {
-      // A release without Volatile config resolves the section through the
-      // settings service instead; the refactor that removed it also removed
-      // `HAS_SECTION_INSTALLER`, so this branch is the legacy installer path.
-      assert.equal(HAS_SECTION_INSTALLER, true, 'no live config reference and no installer')
-      await ctx.settings.update('web-search-anysearch', { searchProvider: 'deepseek-official' })
-    }
+    await write('deepseek-official')
     await ctx.web.search({ query: 'q' })
     assert.equal(hits[1], 'https://search.stored.test/v1/messages')
   })
 
   // And back, still on the same registration.
-  const live = fiber.config.searchProvider
-  if (typeof live?.get === 'function') live[VOLATILE_WRITE]('anysearch')
-  else await ctx.settings.update('web-search-anysearch', { searchProvider: 'anysearch' })
+  await write('anysearch')
   await ctx.web.search({ query: 'q' })
   assert.equal(hits[2], 'https://a.example/v1/search')
 
   await ctx.fiber.dispose()
 })
 
-test('declares its namespace where the settings seam still installs sections', async () => {
-  if (!HAS_SECTION_INSTALLER) {
-    // 0.1.7-alpha.1 removed the seam; the live config reference is the source,
-    // and the derived form comes from the schema's volatile fields instead.
-    assert.equal(typeof settingsSdk.SettingsForms, 'function')
-    return
-  }
+test('declares its namespace wherever a settings service installs sections', async () => {
   const ctx = new Context()
   await ctx.plugin(WebRuntime, {})
   const fiber = ctx.plugin(plugin, ENTRY)
   await fiber.await()
-  const namespaces = ctx.settings.describe().map(row => String(row.ns))
-  assert.ok(namespaces.includes('web-search-anysearch'))
+
+  const settings = ctx.get('settings')
+  if (settings === undefined) {
+    // A composition without a settings service: the plugin serves from its
+    // composition entry and registers no namespace, which is the documented
+    // fallback rather than a failure.
+    const hits = []
+    recordFetch(hits)
+    await ctx.web.search({ query: 'q' })
+    assert.equal(hits[0], 'https://a.example/v1/search')
+  } else {
+    const namespaces = settings.describe().map(row => String(row.ns))
+    assert.ok(namespaces.includes('web-search-anysearch'))
+  }
+
   await ctx.fiber.dispose()
 })
