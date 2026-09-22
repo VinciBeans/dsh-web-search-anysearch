@@ -183,9 +183,12 @@ test('apply registers the switch provider and reads the switch from the section'
   // the supported range that one method is the only installer shape: the 0.1.2
   // line's module-level export is below the floor and no longer read.
   const settingsSdk = await import('@deepseek-ai/dsh-settings')
-  const hasSectionInstaller = typeof settingsSdk.SettingsForms === 'function'
-    ? false
-    : typeof settingsSdk.SettingsProvider?.prototype?.installSection === 'function'
+  // From 0.1.5-alpha.1 through 0.1.6-alpha.2 the settings service is the module's
+  // DEFAULT export and carries `installSection`; 0.1.7 exports `SettingsForms`
+  // instead and has no installer. Probing the runtime shape this way matches how
+  // the plugin itself decides.
+  const hasSectionInstaller = typeof settingsSdk.SettingsForms !== 'function'
+    && typeof settingsSdk.default?.prototype?.installSection === 'function'
   let captured
   let installed
   // The section a settings service resolves for this namespace. The plugin reads
@@ -312,9 +315,12 @@ test('apply falls back to the composition entry without the settings seam', asyn
 test('installs the section through the settings service where one carries an installer', async () => {
   const { apply } = await import('../lib/index.js')
   const settingsSdk = await import('@deepseek-ai/dsh-settings')
-  const hasSectionInstaller = typeof settingsSdk.SettingsForms === 'function'
-    ? false
-    : typeof settingsSdk.SettingsProvider?.prototype?.installSection === 'function'
+  // From 0.1.5-alpha.1 through 0.1.6-alpha.2 the settings service is the module's
+  // DEFAULT export and carries `installSection`; 0.1.7 exports `SettingsForms`
+  // instead and has no installer. Probing the runtime shape this way matches how
+  // the plugin itself decides.
+  const hasSectionInstaller = typeof settingsSdk.SettingsForms !== 'function'
+    && typeof settingsSdk.default?.prototype?.installSection === 'function'
   let captured
   let registeredNs
   // The installer rides the settings SERVICE across the supported range. The
