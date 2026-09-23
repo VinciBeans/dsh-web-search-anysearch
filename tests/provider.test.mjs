@@ -24,6 +24,40 @@ async function registryHasInstaller() {
     && typeof settingsSdk.default?.prototype?.installSection === 'function'
 }
 
+/**
+ * Build the settings-service double both integration tests drive.
+ *
+ * It mirrors the shape the installed dsh actually has — exposing `installSection`
+ * only where a release carries one — because the plugin decides on the method it
+ * finds, and a double advertising a method the runtime lacks would let the test
+ * navigate a shape that never occurs.
+ * @param options - whether this release has the installer, plus the sinks each
+ *   step reports into.
+ * @returns the service object to hand the plugin.
+ */
+function settingsServiceStub(options) {
+  let resolved = {}
+  return {
+    register(ns, _schema, config) {
+      options.onRegister(ns)
+      resolved = config?.base ?? {}
+      options.onResolve(resolved)
+      return { get: () => resolved, watch: () => () => {} }
+    },
+    update(ns, patch) {
+      resolved = { ...resolved, ...patch }
+      options.onUpdate(resolved)
+    },
+    ...options.hasInstaller
+      ? {
+          installSection(owner, ns, schema, entry, hooks) {
+            options.onInstall({ owner, ns, schema, entry, hooks })
+          },
+        }
+      : {},
+  }
+}
+
 test('Config fills the apiKeyEnv default and keeps explicit values', () => {
   assert.equal(configValueOf(Config({}).apiKeyEnv), 'ANYSEARCH_API_KEY')
   assert.equal(configValueOf(Config({ apiKeyEnv: 'MY_KEY', baseURL: 'https://x.example' }).apiKeyEnv), 'MY_KEY')
@@ -211,25 +245,13 @@ test('apply registers the switch provider and reads the switch from the section'
   // callback run but cannot carry that resolution, so this records the fact
   // rather than letting the assertion assume it.
   let sectionAttached = false
-  // The double always exposes the installer, because the plugin is what decides
-  // whether a release HAS one: it probes `service.installSection` and skips the
-  // registration where 0.1.7 replaced that seam with live config references. A
-  // double that omitted the method could not tell the two situations apart, and
-  // would assert the plugin's detection rather than its behaviour.
-  const settings = {
-    register(ns, _schema, options) {
-      sectionAttached = true
-      applied = options?.base ?? {}
-      return { get: () => applied, watch: () => () => {} }
-    },
-    update(ns, patch) {
-      serviceUpdateCalled = true
-      applied = { ...applied, ...patch }
-    },
-    installSection(owner, ns, schema, entry, hooks) {
-      installed = { owner, ns, schema, entry, hooks }
-    },
-  }
+  const settings = settingsServiceStub({
+    hasInstaller: await registryHasInstaller(),
+    onRegister: () => { sectionAttached = true },
+    onResolve: (base) => { applied = base },
+    onUpdate: (next) => { serviceUpdateCalled = true; applied = next },
+    onInstall: (record) => { installed = record },
+  })
   // The built-in provider's live config, as the loader exposes it: on
   // 0.1.7-alpha.1 every declared field is a Volatile reference.
   const deepseekConfig = {
@@ -331,22 +353,13 @@ test('installs the section through the settings service where one carries an ins
   // plugin registers the section; where 0.1.7 replaced the seam, nothing is
   // registered and the live config reference is the authority. Either way the
   // provider is wired.
-  const settings = {
-    register(ns, _schema, options) {
-      registeredNs = ns
-      // The seam resolves the section: the composition entry the consumer
-      // declared as `base`, with whatever the stored document layers on top
-      // (nothing here). The plugin reads whatever `get()` answers on every
-      // search, so a double returning an empty object would model an entry that
-      // carries no config at all.
-      return { get: () => options.base, watch: () => () => {} }
-    },
-    // Only a release that HAS the installer exposes it, so this double mirrors
-    // what the plugin is handed at runtime. Advertising it on a release whose
-    // service lacks it would let the plugin navigate a shape that never occurs
-    // and make the assertion below meaningless.
-    ...hasInstaller ? { installSection() {} } : {},
-  }
+  const settings = settingsServiceStub({
+    hasInstaller,
+    onRegister: (ns) => { registeredNs = ns },
+    onResolve: () => {},
+    onUpdate: () => {},
+    onInstall: () => {},
+  })
   const ctx = {
     get: (service) => service === 'settings' ? settings : undefined,
     // cordis scoped contexts expose services as properties too, which is how an
