@@ -20,8 +20,16 @@ const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import
  */
 async function registryHasInstaller() {
   const settingsSdk = await import('@deepseek-ai/dsh-settings')
-  return typeof settingsSdk.SettingsForms !== 'function'
+  const verdict = typeof settingsSdk.SettingsForms !== 'function'
     && typeof settingsSdk.default?.prototype?.installSection === 'function'
+  console.log('DIAG6', JSON.stringify({
+    keys: Object.keys(settingsSdk),
+    defaultType: typeof settingsSdk.default,
+    protoHasInstall: typeof settingsSdk.default?.prototype?.installSection,
+    SettingsForms: typeof settingsSdk.SettingsForms,
+    verdict,
+  }))
+  return verdict
 }
 
 /**
