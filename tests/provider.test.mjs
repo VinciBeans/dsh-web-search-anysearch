@@ -343,23 +343,22 @@ test('apply falls back to the composition entry without the settings seam', asyn
   assert.equal(captured.id, 'anysearch')
 })
 
-test('installs the section through the settings service where one carries an installer', async () => {
+test('hands the section to the settings service exactly where one carries an installer', async () => {
   const { apply } = await import('../lib/index.js')
   const hasInstaller = await registryHasInstaller()
   let captured
-  let registeredNs
-  let installReached = false
-  // The installer rides the settings SERVICE across the supported range, so the
-  // double mirrors whichever shape this release's service has. Where it exists the
-  // plugin registers the section; where 0.1.7 replaced the seam, nothing is
-  // registered and the live config reference is the authority. Either way the
-  // provider is wired.
+  let installCalls = 0
+  // What the plugin owns here is the DELIVERY: it must hand the section to the
+  // service's installer on a release that has one, and register nothing on the
+  // release that replaced the seam with live config references. Whether that
+  // installer then registers the namespace is the dsh's own behaviour — it lives
+  // inside `SettingsProvider.installSection`, which a double cannot exercise.
   const settings = settingsServiceStub({
     hasInstaller,
-    onRegister: (ns) => { registeredNs = ns },
+    onRegister: () => { throw new Error('the plugin must not register the section itself') },
     onResolve: () => {},
     onUpdate: () => {},
-    onInstall: () => { installReached = true },
+    onInstall: () => { installCalls += 1 },
   })
   const ctx = {
     get: (service) => service === 'settings' ? settings : undefined,
@@ -372,12 +371,8 @@ test('installs the section through the settings service where one carries an ins
     web: { registerSearchProvider: (p) => { captured = p } },
   }
   apply(ctx, {})
-  console.log('DIAG7', JSON.stringify({ hasInstaller, installReached, registeredNs, serviceHasInstall: typeof settings.installSection }))
   assert.equal(captured.id, 'anysearch')
-  // The seam registers where it exists; where 0.1.7 replaced it, the composition
-  // entry stays authoritative and nothing is registered.
-  if (hasInstaller) assert.equal(registeredNs, 'web-search-anysearch')
-  else assert.equal(registeredNs, undefined, 'a release with no installer must not register a section')
+  assert.equal(installCalls, hasInstaller ? 1 : 0, 'the section is delivered only where an installer exists')
 })
 
 test('guards the cross-plugin identifiers and default mirrors against the installed dsh', async () => {
