@@ -20,16 +20,8 @@ const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import
  */
 async function registryHasInstaller() {
   const settingsSdk = await import('@deepseek-ai/dsh-settings')
-  const verdict = typeof settingsSdk.SettingsForms !== 'function'
+  return typeof settingsSdk.SettingsForms !== 'function'
     && typeof settingsSdk.default?.prototype?.installSection === 'function'
-  console.log('DIAG6', JSON.stringify({
-    keys: Object.keys(settingsSdk),
-    defaultType: typeof settingsSdk.default,
-    protoHasInstall: typeof settingsSdk.default?.prototype?.installSection,
-    SettingsForms: typeof settingsSdk.SettingsForms,
-    verdict,
-  }))
-  return verdict
 }
 
 /**
@@ -356,6 +348,7 @@ test('installs the section through the settings service where one carries an ins
   const hasInstaller = await registryHasInstaller()
   let captured
   let registeredNs
+  let installReached = false
   // The installer rides the settings SERVICE across the supported range, so the
   // double mirrors whichever shape this release's service has. Where it exists the
   // plugin registers the section; where 0.1.7 replaced the seam, nothing is
@@ -366,7 +359,7 @@ test('installs the section through the settings service where one carries an ins
     onRegister: (ns) => { registeredNs = ns },
     onResolve: () => {},
     onUpdate: () => {},
-    onInstall: () => {},
+    onInstall: () => { installReached = true },
   })
   const ctx = {
     get: (service) => service === 'settings' ? settings : undefined,
@@ -379,6 +372,7 @@ test('installs the section through the settings service where one carries an ins
     web: { registerSearchProvider: (p) => { captured = p } },
   }
   apply(ctx, {})
+  console.log('DIAG7', JSON.stringify({ hasInstaller, installReached, registeredNs, serviceHasInstall: typeof settings.installSection }))
   assert.equal(captured.id, 'anysearch')
   // The seam registers where it exists; where 0.1.7 replaced it, the composition
   // entry stays authoritative and nothing is registered.
