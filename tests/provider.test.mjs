@@ -7,6 +7,23 @@ const BASE = 'https://api.anysearch.com'
 /** The published version the build stamps onto outbound requests. */
 const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 
+/**
+ * Whether this dsh still carries the settings service's section installer.
+ *
+ * The service class is the settings module's default export through
+ * `0.1.6-alpha.2` (`export default SettingsProvider`), and it is that class which
+ * declares `installSection`; `0.1.7-alpha.1` replaces it with the named
+ * `SettingsForms` export and has no installer. Tests use this only to decide
+ * which outcome to assert — the plugin detects the method on the INSTANCE it is
+ * handed, which is what makes the behaviour version-independent.
+ * @returns whether a section installer exists in the installed dsh.
+ */
+async function registryHasInstaller() {
+  const settingsSdk = await import('@deepseek-ai/dsh-settings')
+  return typeof settingsSdk.SettingsForms !== 'function'
+    && typeof settingsSdk.default?.prototype?.installSection === 'function'
+}
+
 test('Config fills the apiKeyEnv default and keeps explicit values', () => {
   assert.equal(configValueOf(Config({}).apiKeyEnv), 'ANYSEARCH_API_KEY')
   assert.equal(configValueOf(Config({ apiKeyEnv: 'MY_KEY', baseURL: 'https://x.example' }).apiKeyEnv), 'MY_KEY')
@@ -179,16 +196,6 @@ test('the switch provider routes to the section-named backend', async () => {
 
 test('apply registers the switch provider and reads the switch from the section', async () => {
   const { apply } = await import('../lib/index.js')
-  // Whether this dsh still has the settings service's section installer. Across
-  // the supported range that one method is the only installer shape: the 0.1.2
-  // line's module-level export is below the floor and no longer read.
-  const settingsSdk = await import('@deepseek-ai/dsh-settings')
-  // From 0.1.5-alpha.1 through 0.1.6-alpha.2 the settings service is the module's
-  // DEFAULT export and carries `installSection`; 0.1.7 exports `SettingsForms`
-  // instead and has no installer. Probing the runtime shape this way matches how
-  // the plugin itself decides.
-  const hasSectionInstaller = typeof settingsSdk.SettingsForms !== 'function'
-    && typeof settingsSdk.default?.prototype?.installSection === 'function'
   let captured
   let installed
   // The section a settings service resolves for this namespace. The plugin reads
@@ -204,22 +211,25 @@ test('apply registers the switch provider and reads the switch from the section'
   // callback run but cannot carry that resolution, so this records the fact
   // rather than letting the assertion assume it.
   let sectionAttached = false
-  const settings = hasSectionInstaller
-    ? {
-        register(ns, _schema, options) {
-          sectionAttached = true
-          applied = options?.base ?? {}
-          return { get: () => applied, watch: () => () => {} }
-        },
-        update(ns, patch) {
-          serviceUpdateCalled = true
-          applied = { ...applied, ...patch }
-        },
-        installSection(owner, ns, schema, entry, hooks) {
-          installed = { owner, ns, schema, entry, hooks }
-        },
-      }
-    : {}
+  // The double always exposes the installer, because the plugin is what decides
+  // whether a release HAS one: it probes `service.installSection` and skips the
+  // registration where 0.1.7 replaced that seam with live config references. A
+  // double that omitted the method could not tell the two situations apart, and
+  // would assert the plugin's detection rather than its behaviour.
+  const settings = {
+    register(ns, _schema, options) {
+      sectionAttached = true
+      applied = options?.base ?? {}
+      return { get: () => applied, watch: () => () => {} }
+    },
+    update(ns, patch) {
+      serviceUpdateCalled = true
+      applied = { ...applied, ...patch }
+    },
+    installSection(owner, ns, schema, entry, hooks) {
+      installed = { owner, ns, schema, entry, hooks }
+    },
+  }
   // The built-in provider's live config, as the loader exposes it: on
   // 0.1.7-alpha.1 every declared field is a Volatile reference.
   const deepseekConfig = {
@@ -267,19 +277,18 @@ test('apply registers the switch provider and reads the switch from the section'
     settings.update('web-search-anysearch', { searchProvider: 'deepseek-official' })
   }
   await captured.search({ query: 'q' })
-  // A committed change re-routes the next search without re-registering. Which
-  // write mechanism carries it depends on the release: the settings service where
-  // the installer attached one, the entry's live config reference on 0.1.7.
+  // Which source the plugin read decides both the endpoint and the credential:
+  // the seam's resolved section where the installer attached one, the composition
+  // entry everywhere else. The installer's `ctx.inject` callback resolves a fiber
+  // on a real context, which the plain-object double cannot carry, so the
+  // composition-entry outcome is asserted rather than assumed.
   if (installed !== undefined && serviceUpdateCalled && !sectionAttached) {
-    // The installer accepted the registration but its `ctx.inject` callback never
-    // attached the section: it resolves a fiber on a real context, which the
-    // plain-object double above cannot carry. The plugin then correctly keeps
-    // serving its composition entry, which is the documented fallback.
     assert.equal(calls[0].url, 'https://a.example/v1/search', 'a seam that never attaches leaves the composition entry in force')
+    assert.equal(calls[0].init.headers.authorization, 'Bearer anysearch-key')
   } else {
     assert.equal(calls[0].url, 'https://search.stored.test/v1/messages')
+    assert.equal(calls[0].init.headers.authorization, 'Bearer dsk-stored')
   }
-  assert.equal(calls[0].init.headers.authorization, 'Bearer dsk-stored')
 })
 
 test('apply falls back to the composition entry without the settings seam', async () => {
@@ -314,19 +323,14 @@ test('apply falls back to the composition entry without the settings seam', asyn
 
 test('installs the section through the settings service where one carries an installer', async () => {
   const { apply } = await import('../lib/index.js')
-  const settingsSdk = await import('@deepseek-ai/dsh-settings')
-  // From 0.1.5-alpha.1 through 0.1.6-alpha.2 the settings service is the module's
-  // DEFAULT export and carries `installSection`; 0.1.7 exports `SettingsForms`
-  // instead and has no installer. Probing the runtime shape this way matches how
-  // the plugin itself decides.
-  const hasSectionInstaller = typeof settingsSdk.SettingsForms !== 'function'
-    && typeof settingsSdk.default?.prototype?.installSection === 'function'
+  const hasInstaller = await registryHasInstaller()
   let captured
   let registeredNs
-  // The installer rides the settings SERVICE across the supported range. The
-  // double exposes it where this release has one and omits it where it does not,
-  // so the plugin's feature detection is exercised either way; with none present
-  // it keeps serving its composition entry, which still registers the provider.
+  // The installer rides the settings SERVICE across the supported range, so the
+  // double mirrors whichever shape this release's service has. Where it exists the
+  // plugin registers the section; where 0.1.7 replaced the seam, nothing is
+  // registered and the live config reference is the authority. Either way the
+  // provider is wired.
   const settings = {
     register(ns, _schema, options) {
       registeredNs = ns
@@ -337,7 +341,11 @@ test('installs the section through the settings service where one carries an ins
       // carries no config at all.
       return { get: () => options.base, watch: () => () => {} }
     },
-    ...hasSectionInstaller ? { installSection() {} } : {},
+    // Only a release that HAS the installer exposes it, so this double mirrors
+    // what the plugin is handed at runtime. Advertising it on a release whose
+    // service lacks it would let the plugin navigate a shape that never occurs
+    // and make the assertion below meaningless.
+    ...hasInstaller ? { installSection() {} } : {},
   }
   const ctx = {
     get: (service) => service === 'settings' ? settings : undefined,
@@ -351,7 +359,10 @@ test('installs the section through the settings service where one carries an ins
   }
   apply(ctx, {})
   assert.equal(captured.id, 'anysearch')
-  if (hasSectionInstaller) assert.equal(registeredNs, 'web-search-anysearch')
+  // The seam registers where it exists; where 0.1.7 replaced it, the composition
+  // entry stays authoritative and nothing is registered.
+  if (hasInstaller) assert.equal(registeredNs, 'web-search-anysearch')
+  else assert.equal(registeredNs, undefined, 'a release with no installer must not register a section')
 })
 
 test('guards the cross-plugin identifiers and default mirrors against the installed dsh', async () => {
