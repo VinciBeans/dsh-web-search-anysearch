@@ -19,7 +19,7 @@ dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
 dsh --profile web --dump-config
 ```
 
-每个插件版本针对、并命名为它所适配的 dsh 发布，包内已附预构建的宿主与浏览器 bundle。低于支持下限的宿主可继续固定使用已冻结的 `0.1.2` 线：`dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@latest`（默认 `dist-tag` 为 `latest`，即 `0.1.2-rc.1`）。
+每个插件版本针对、并命名为它所适配的 dsh 发布，包内已附预构建的宿主与浏览器 bundle。`alpha` 跟随当前发布；需要精确固定时写 `@wenqi_bian/dsh-web-search-anysearch@0.2.0-alpha.2`。低于支持下限的宿主请显式固定已冻结的 `0.1.2` 线：`dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@0.1.2-rc.1`。
 
 从手写行升级：安装 bundle 前请先删掉 profile patch 里已有的 `web-search-anysearch` 行。bundle 会添加同一个行 id，重复 id 会导致加载失败。
 

@@ -19,7 +19,7 @@ Restart `dsh web` afterwards: profile bundles and the served browser half are re
 dsh --profile web --dump-config
 ```
 
-Each plugin release is built for, and named after, the dsh release it targets, and ships prebuilt host and browser halves. Hosts below the supported floor can stay on the frozen `0.1.2` line with `dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@latest` (no `dist-tag` by default; `latest` is `0.1.2-rc.1`).
+Each plugin release is built for, and named after, the dsh release it targets, and ships prebuilt host and browser halves. `alpha` tracks the current release; pin one exactly with `@wenqi_bian/dsh-web-search-anysearch@0.2.0-alpha.2`. Hosts below the supported floor pin the frozen line explicitly: `dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@0.1.2-rc.1`.
 
 Upgrading from a hand-written row: delete any existing `web-search-anysearch` entry from your profile patch before installing the bundle. The bundle adds the same row id, and duplicate ids fail the load.
 
