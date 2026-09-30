@@ -73,14 +73,15 @@ export interface SettingsScopeSnapshot {
 }
 
 /**
- * The bound scope a card stages over. Only the page generations that leave the
- * card to reach the settings seam itself use one: `ctx.settingsScope.bind({ namespace })`
- * serves this shape on `0.1.6-alpha.2` and its predecessors, and `client/index.ts`
- * binds it. A page that owns the entry's form (`0.1.7-alpha.1` and later) instead
- * passes its values and `mutate` command to the card as owner props, and the
- * form-backed card in `card.tsx` writes through those without a scope. Writes
- * report whether the Host accepted the value, which is the only reliable signal:
- * a refused write leaves the document unchanged.
+ * The bound scope a card stages over, for the pages that leave the card to
+ * reach the configuration seam itself. `client/index.ts` binds one from
+ * whichever seam the installed release composes: the namespace's form through
+ * `ctx.configForms.get(namespace)` (`0.1.7-alpha.1` and later), or
+ * `ctx.settingsScope.bind({ namespace })` before it. A page that owns the
+ * entry's form instead passes its values and `mutate` command to the card as
+ * owner props, and the form-backed card in `card.tsx` writes through those
+ * without a scope. Writes report whether the Host accepted the value, which is
+ * the only reliable signal: a refused write leaves the document unchanged.
  */
 export interface SettingsScope {
   getSnapshot(): SettingsScopeSnapshot
@@ -202,7 +203,7 @@ export class AnySearchCardController {
   private failed = false
 
   /**
-   * @param scope - the bound settings scope for the `web-search-anysearch`
+   * @param scope - the configuration scope for the `web-search-anysearch`
    *   namespace, or undefined while the installed dsh exposes no such seam and
    *   the page supplies no config form. Without one the card renders nothing.
    * @param credentials - the credentials domain the section's reference addresses.
@@ -212,7 +213,12 @@ export class AnySearchCardController {
     private readonly credentials: CredentialsRemote,
   ) {
     this.credential = { ref: this.apiKeyRef(), configured: false, writable: true }
-    scope?.subscribe(() => { void this.readCredential() })
+    // The card renders from this snapshot, so it must carry the scope's view from
+    // the start and after every change of it: reading the credential alone only
+    // republishes when the credential itself moved, which leaves a served
+    // namespace looking unserved until the first edit.
+    if (scope !== undefined) scope.subscribe(() => { this.publish(); void this.readCredential() })
+    this.publish()
     void this.readCredential()
   }
 

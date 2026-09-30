@@ -25,13 +25,13 @@ dsh --profile web --dump-config
 
 ## 快速开始
 
-1. 打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`**，进入 `web-search-anysearch` 行。
+1. 打开 **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`**。配置就在该页面上；同一组控件也出现在它内部的 `web-search-anysearch` 行页面。
 2. 开关保持在 **AnySearch**，或选择 **官方 DeepSeek 搜索**。
 3. 保存。下一次 `web_search` 立即使用所选后端，无需重启。
 
 AnySearch 无需凭据。若要提高限流，把 key 填进卡片的 **API Key** 字段（卡片会存进凭据域），或自行把它写到 `ANYSEARCH_API_KEY` 引用下（见[配置](#配置)）。
 
-该行的页面是 dsh `0.1.7-alpha.1` 及之后（含 `0.2.0`）渲染本表单的位置。`0.1.6-alpha.2` 上是 bundle 自己的页面；`0.1.5` 线上是 **设置 → 插件 → 插件配置 → AnySearch 搜索服务**。
+dsh `0.1.7-alpha.1` 及之后（含 `0.2.0`），bundle 自己的页面与该行页面都承载本表单。`0.1.6-alpha.2` 上是 bundle 自己的页面；`0.1.5` 线上是 **设置 → 插件 → 插件配置 → AnySearch 搜索服务**。
 
 ## 兼容性
 
@@ -42,7 +42,7 @@ AnySearch 无需凭据。若要提高限流，把 key 填进卡片的 **API Key*
 该区间之下有两个契约各有两种形状，本构建探测实际安装的是哪一种，而不是按版本号分支：
 
 - **设置 seam。** 直到 `0.1.6-alpha.2`，插件通过 `ctx.settings.installSection(...)` 注册配置节。`0.1.7-alpha.1` 起该调用被删除：schema 上标记 `.volatile()` 的字段以稳定引用的形式交给 `apply`，`get()` 返回当前值，因此提交的改动会让下一次搜索直接改道，而不必重挂插件。
-- **Plugins 页面。** `0.1.6-alpha.2` 渲染 bundle 自己的配置，`0.1.7-alpha.1` 渲染「每一行的页面」并把该行实时取值作为 owner props 传入。浏览器半部对该区间已知的三个槽位都注册，部署没声明的槽位保持休眠。
+- **Plugins 页面。** `0.1.6-alpha.2` 渲染 bundle 自己的配置页；`0.1.7-alpha.1` 及之后同时渲染该页与「每一行的页面」，后者把该行实时取值作为 owner props 传入。浏览器半部对该区间已知的三个槽位都注册，部署没声明的槽位保持休眠。bundle 自己的页面不提供表单，因此卡片自行绑定该命名空间的配置表单（`0.1.7-alpha.1` 起是 `ctx.configForms`，更早是 `ctx.settingsScope`）；行页面继续使用页面下发的表单。
 
 ## 配置
 

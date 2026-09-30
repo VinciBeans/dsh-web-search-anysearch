@@ -7,11 +7,15 @@
  * Three page generations exist across the supported range, and this module
  * registers into all three — each slot only ever fires where a page declared it:
  *
- * - **0.1.7-alpha.1**: one row's configuration on that row's page, through
- *   `plugins.row.config` keyed `<bundle package>#<row id>`. The page resolves
- *   the entry's config form by the bare row id (which is the profile entry id)
- *   and passes it down as the owner's `form` prop, so the card edits through
- *   `form.mutate` and needs no settings service of its own.
+ * - **0.1.7-alpha.1 and later**: one row's configuration on that row's page,
+ *   through `plugins.row.config` keyed `<bundle package>#<row id>`. The page
+ *   resolves the entry's config form by the bare row id (which is the profile
+ *   entry id) and passes it down as the owner's `form` prop, so the card edits
+ *   through `form.mutate`. The same page generation also renders the bundle's own
+ *   configuration slot (`plugins.bundle.config`, keyed by package name) on the
+ *   bundle's page, and supplies no form there; the card serves it by reading and
+ *   writing the namespace's configuration form itself — `ctx.configForms.get(ns)`
+ *   — the way the shipped bundles own their data plane.
  * - **0.1.6-alpha.2**: a bundle's own configuration through
  *   `plugins.bundle.config`, keyed by the bundle's package name, with the card
  *   reading and writing a `ctx.settingsScope` binding.
@@ -106,24 +110,32 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const name = 'web-search-anysearch'
 
 /**
- * Required services: the slot registry, locale copy, the wire namespaces the
- * card reads through, and the settings-scope service the pre-0.1.7 pages need.
- * `settingsScope` is optional in practice — a page generation that supplies its
- * entry's form as owner props needs no scope at all.
+ * Required services: the slot registry, locale copy, and the wire namespaces the
+ * card reads through. The configuration seam the bundle's own page needs is
+ * deliberately absent: `ctx.configForms` exists from `0.1.7-alpha.1` and
+ * `ctx.settingsScope` before it, so declaring either would leave the whole
+ * browser half pending on the releases that dropped it — and a page generation
+ * that supplies its entry's form as owner props needs no seam at all.
  */
 export const inject = ['slots', 'locale', 'remote', 'remote.credentials']
 
 /**
- * Resolve the bound settings scope for this namespace from whichever seam the
- * installed dsh exposes, so one browser half serves the range. `0.1.6-alpha.2`
- * and its predecessors carry `ctx.settingsScope`; a build with neither leaves
- * the card dormant rather than failing the plugin, and a 0.1.7 page never asks
- * for it because it hands the card its own form instead.
+ * Resolve the configuration scope for this namespace from whichever seam the
+ * installed dsh exposes, so one browser half serves the range.
  *
- * The service is reached through `ctx.get`, never as a bare property: this
- * plugin cannot declare `settingsScope` in its inject list — a release that
- * removed the service would leave the whole browser half pending and fail the
- * client boot audit — and a bare read of a service outside `inject` throws
+ * `0.1.7-alpha.1` replaced `ctx.settingsScope` with `ctx.configForms`: a
+ * namespace's own form, addressed by name, whose `getSnapshot` / `subscribe` /
+ * `set` / `unset` are the reads and writes this card stages over. That is the
+ * seam which lets the card configure the bundle from the bundle's own page,
+ * where the page supplies no form — the self-sufficient data plane the shipped
+ * bundles use. Releases through `0.1.6-alpha.2` carry the older
+ * `ctx.settingsScope.bind({ namespace })` answer instead. A build with neither
+ * leaves the card dormant rather than failing the plugin.
+ *
+ * Both services are reached through `ctx.get`, never as a bare property: this
+ * plugin cannot declare either in its inject list — a release that removed the
+ * service would leave the whole browser half pending and fail the client boot
+ * audit — and a bare read of a service outside `inject` throws
  * (`cordis/src/reflect.ts`, "cannot get property … without inject"). `get` is
  * the lookup that answers undefined instead.
  *
@@ -133,12 +145,35 @@ export const inject = ['slots', 'locale', 'remote', 'remote.credentials']
 function bindScope(ctx: Context): SettingsScope | undefined {
   const get = (ctx as unknown as { get?: (name: string) => unknown }).get
   if (typeof get !== 'function') return undefined
+  const configForms = get.call(ctx, 'configForms') as
+    { get?: (namespace: string) => unknown } | undefined
+  if (typeof configForms?.get === 'function') {
+    const form = configForms.get(ANYSEARCH_SETTINGS_NS)
+    if (isScope(form)) return form
+  }
   const settingsScope = get.call(ctx, 'settingsScope') as
-    { bind?: (spec: { namespace: string }) => SettingsScope } | undefined
+    { bind?: (spec: { namespace: string }) => unknown } | undefined
   if (typeof settingsScope?.bind === 'function') {
-    return settingsScope.bind({ namespace: ANYSEARCH_SETTINGS_NS })
+    const scope = settingsScope.bind({ namespace: ANYSEARCH_SETTINGS_NS })
+    if (isScope(scope)) return scope
   }
   return undefined
+}
+
+/**
+ * Whether a value is the scope interface this card stages over. The members are
+ * probed rather than trusted: a release that reshapes either seam should leave
+ * the card dormant, not hand it a partial object it would then write through.
+ * @param value - the candidate a seam answered with.
+ * @returns true when every member the card calls is a function.
+ */
+function isScope(value: unknown): value is SettingsScope {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return typeof candidate.getSnapshot === 'function'
+    && typeof candidate.subscribe === 'function'
+    && typeof candidate.set === 'function'
+    && typeof candidate.unset === 'function'
 }
 
 /**

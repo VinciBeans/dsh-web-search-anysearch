@@ -78,27 +78,60 @@ function loadBundle() {
  * deployment declares — the same contract `slots.inject` enforces, so an
  * undeclared slot must leave its callback unrun rather than fail the load.
  * @param declared - slot names this deployment's page declares.
- * @returns the registrations the apply produced, keyed by slot name.
+ * @param options - which configuration seams the deployment composes.
+ * @returns the registrations the apply produced, keyed by slot name, plus what
+ *   the doubles recorded.
  */
-function applyWithDeclaredSlots(declared) {
+function applyWithDeclaredSlots(declared, options = {}) {
+  const { configForms = false, settingsScope = true } = options
   const exports = loadBundle()
   const registered = new Map()
   const injected = []
+  /** Writes the card made through the configuration seam. */
+  const writes = []
+  /** Namespaces the `configForms` seam was asked for. */
+  const lookups = []
+  /** Namespaces the legacy `settingsScope` seam was asked to bind. */
+  const bound = []
+  const snapshot = {
+    status: 'ready',
+    writable: true,
+    revision: 3,
+    value: { searchProvider: 'anysearch', baseURL: 'https://api.anysearch.com' },
+    user: {},
+    base: {},
+  }
   // The settings scope the 0.1.6 and earlier page generations reach through the
   // service registry. A 0.1.7 deployment has none: its page hands the card the
   // entry's form as owner props instead.
   const scope = {
-    bind: ({ namespace }) => ({
-      getSnapshot: () => ({ status: 'ready', writable: true, value: { searchProvider: 'anysearch' } }),
-      subscribe: () => () => {},
-      set: async () => true,
-      unset: async () => true,
-    }),
+    bind: ({ namespace }) => {
+      bound.push(namespace)
+      return {
+        getSnapshot: () => snapshot,
+        subscribe: () => () => {},
+        set: async (field, value) => { writes.push({ op: 'set', field, value }); return true },
+        unset: async (field) => { writes.push({ op: 'unset', field }); return true },
+      }
+    },
+  }
+  // `0.1.7-alpha.1` and later: the namespace's own form, addressed by name.
+  const form = {
+    getSnapshot: () => snapshot,
+    subscribe: () => () => {},
+    set: async (field, value) => { writes.push({ op: 'set', field, value }); return true },
+    unset: async (field) => { writes.push({ op: 'unset', field }); return true },
   }
   const ctx = {
-    // The card reaches the settings scope through the service registry, not as
+    // The card reaches a configuration seam through the service registry, not as
     // a bare property: a bare read of a service outside `inject` throws.
-    get: (name) => name === 'settingsScope' ? scope : undefined,
+    get: (name) => {
+      if (name === 'configForms' && configForms) {
+        return { get: (namespace) => { lookups.push(namespace); return form } }
+      }
+      if (name === 'settingsScope' && settingsScope) return scope
+      return undefined
+    },
     locale: {
       register: () => {},
       bind: () => key => key,
@@ -126,7 +159,7 @@ function applyWithDeclaredSlots(declared) {
     effect: () => () => {},
   }
   exports.apply(ctx)
-  return { exports, registered, injected }
+  return { exports, registered, injected, writes, lookups, bound }
 }
 
 test('client bundle registers and mounts the card without throwing', () => {
@@ -219,7 +252,12 @@ test('the card renders the summary and page views the 0.1.6 page asks for', () =
   assert.equal(buttonByText(clean, 'save').props.disabled, true)
   const failed = component({ ...props, useAnysearchCard: selector => selector({ ...served, failed: true }), view: 'page' })
   assert.equal(textOf(byClass(failed, 'dswa-failed')), 'saveFailed')
-  assert.equal(component({ ...props, view: 'page' }), null)
+  const unserved = { ...state, available: false }
+  assert.equal(
+    component({ ...props, useAnysearchCard: selector => selector(unserved), view: 'page' }),
+    null,
+    'an unserved namespace renders nothing',
+  )
 
   // The pre-0.1.6 card renders its own chrome: a collapsed disclosure inside
   // the page's list. Its body — the same CardBody, plus its own read-only
@@ -328,4 +366,72 @@ test('the card addresses the credential by the section reference and reports a r
   }).inject()
   assert.equal(await silent.credentials.describe('ANYSEARCH_API_KEY'), undefined)
   assert.equal(await silent.credentials.save('ANYSEARCH_API_KEY', 'sekret'), undefined)
+})
+
+/** One macrotask turn, so the controller's settled reads have landed. */
+const settle = async () => { await new Promise((resolve) => { setTimeout(resolve, 0) }) }
+
+/**
+ * The bundle's own page renders `plugins.bundle.config` with a view and the
+ * package key and NOTHING else — no owner form, unlike the row page. The card
+ * therefore supplies its own data plane, exactly as the shipped bundles do: it
+ * binds the namespace's configuration form and reads and writes that.
+ */
+test('the bundle page configures through the namespace form the 0.2.0 seam serves', async () => {
+  const { registered, lookups, bound, writes } = applyWithDeclaredSlots(
+    ['plugins.bundle.config'],
+    { configForms: true, settingsScope: false },
+  )
+  assert.deepEqual(lookups, ['web-search-anysearch'], 'the seam is addressed by the bundle/row namespace')
+  assert.deepEqual(bound, [], 'the removed settingsScope seam is not consulted where configForms is composed')
+
+  const registration = registered.get('plugins.bundle.config')
+  const face = registration.options.inject()
+  await settle()
+  const snapshot = face.hooks.anysearchCard.getSnapshot()
+  assert.equal(snapshot.available, true, 'a served namespace makes the card available without a page-owned form')
+
+  // The page view renders the real controls and its own save control: the bundle
+  // page passes no form, so the card is the whole configuration surface there.
+  const props = { ...face, t: key => key, useAnysearchCard: selector => selector(snapshot), view: 'page' }
+  const page = registration.component(props)
+  assert.notEqual(page, null, 'the bundle page renders the card')
+  assert.ok(byClass(page, 'dswa-backend'), 'the backend switch renders')
+  assert.ok(byClass(page, 'dswa-input'), 'the endpoint and key controls render')
+  assert.ok(buttonByText(page, 'save'), 'the card owns a save control there')
+
+  // A staged edit writes through the namespace form — the same document the row
+  // page's form mutates, so both pages configure one configuration.
+  face.edit('searchProvider', 'deepseek-official')
+  face.save()
+  await settle()
+  assert.deepEqual(writes, [{ op: 'set', field: 'searchProvider', value: 'deepseek-official' }])
+})
+
+test('a deployment composing no configuration seam leaves the card dormant', async () => {
+  const { registered, lookups, bound } = applyWithDeclaredSlots(
+    ['plugins.bundle.config'],
+    { configForms: false, settingsScope: false },
+  )
+  assert.deepEqual(lookups, [])
+  assert.deepEqual(bound, [])
+  const registration = registered.get('plugins.bundle.config')
+  const face = registration.options.inject()
+  await settle()
+  const snapshot = face.hooks.anysearchCard.getSnapshot()
+  assert.equal(snapshot.available, false)
+  assert.equal(
+    registration.component({ ...face, t: key => key, useAnysearchCard: selector => selector(snapshot), view: 'page' }),
+    null,
+  )
+})
+
+test('the namespace form is the seam a release carrying both would use', async () => {
+  const { lookups, bound } = applyWithDeclaredSlots(
+    ['plugins.bundle.config'],
+    { configForms: true, settingsScope: true },
+  )
+  await settle()
+  assert.deepEqual(lookups, ['web-search-anysearch'], 'the current seam answers first')
+  assert.deepEqual(bound, [], 'the legacy seam stays untouched while the current one answers')
 })

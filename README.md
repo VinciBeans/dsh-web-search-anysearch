@@ -25,13 +25,13 @@ Upgrading from a hand-written row: delete any existing `web-search-anysearch` en
 
 ## Quickstart
 
-1. Open **Settings → Plugins → `@wenqi_bian/dsh-web-search-anysearch`** and open the `web-search-anysearch` row.
+1. Open **Settings → Plugins → `@wenqi_bian/dsh-web-search-anysearch`**. The configuration is on that page; the same controls are also on the `web-search-anysearch` row inside it.
 2. Leave the switch on **AnySearch**, or pick **official DeepSeek search**.
 3. Save. The next `web_search` uses the backend you picked, with no restart.
 
 AnySearch needs no credential. To raise its rate limit, type the key into the card's **API key** field, which stores it in the credentials domain, or put it there yourself under the `ANYSEARCH_API_KEY` reference (see [Configuration](#configuration)).
 
-The row's page is where dsh `0.1.7-alpha.1` and later, including `0.2.0`, render this form. On `0.1.6-alpha.2` it is the bundle's own page; on the `0.1.5` line it is **Settings → Plugins → Plugin configuration → AnySearch 搜索服务**.
+On dsh `0.1.7-alpha.1` and later, including `0.2.0`, both the bundle's own page and the row's page carry this form. On `0.1.6-alpha.2` it is the bundle's own page; on the `0.1.5` line it is **Settings → Plugins → Plugin configuration → AnySearch 搜索服务**.
 
 ## Compatibility
 
@@ -42,7 +42,7 @@ The supported range starts at dsh `v0.1.5-alpha.1`, and the CI matrix verifies e
 Two contracts underneath that range have two shapes each, and this build detects which one is installed rather than branching on a version string:
 
 - **Settings.** Through `0.1.6-alpha.2` a plugin registered its section with `ctx.settings.installSection(...)`. From `0.1.7-alpha.1` that call is gone: a schema field marked `.volatile()` reaches `apply` as a stable reference whose `get()` returns the live value, so a committed edit re-routes the next search instead of remounting the plugin.
-- **Plugins page.** `0.1.6-alpha.2` renders a bundle's own configuration, `0.1.7-alpha.1` a row's page with the entry's live values passed in as owner props. The browser half registers into all three slots this range has known and stays dormant where a deployment declares none.
+- **Plugins page.** `0.1.6-alpha.2` renders a bundle's own configuration page; `0.1.7-alpha.1` and later render both that page and a row's page, where the entry's live values arrive as owner props. The browser half registers into all three slots this range has known and stays dormant where a deployment declares none. The bundle's own page supplies no form, so the card binds the namespace's configuration form itself (`ctx.configForms` on `0.1.7-alpha.1` and later, `ctx.settingsScope` before that); the row's page keeps using the form the page hands down.
 
 ## Configuration
 
