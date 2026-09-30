@@ -58,9 +58,36 @@ export interface AnySearchProviderOptions {
   baseURL: string
 }
 
-/** Clamp a requested result count into AnySearch's 1-10 window. */
+/** Clamp a requested result count into AnySearch's 1-10 window; a non-finite request asks for the ceiling. */
 function clampMaxResults(value: number): number {
-  return Math.max(1, Math.min(ANYSEARCH_MAX_RESULTS, Math.floor(value)))
+  return Number.isFinite(value)
+    ? Math.max(1, Math.min(ANYSEARCH_MAX_RESULTS, Math.floor(value)))
+    : ANYSEARCH_MAX_RESULTS
+}
+
+/** Whether one thrown value is the caller's abort rather than a provider failure. */
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+/**
+ * Resolve one operation's API key.
+ *
+ * A resolver failure is mapped to this plugin's seam error so a caller routing
+ * on `error.code` sees a provider failure rather than an unstructured rejection;
+ * the caller's own cancellation passes through untouched.
+ * @param options - the snapshot this operation reads.
+ * @returns the resolved key, or undefined when no resolver is configured.
+ * @throws WebError on a resolver failure, the AbortError on cancellation.
+ */
+async function resolveApiKeyOf(options: AnySearchProviderOptions): Promise<string | undefined> {
+  if (options.resolveApiKey === undefined) return undefined
+  try {
+    return await options.resolveApiKey()
+  } catch (error) {
+    if (isAbort(error)) throw error
+    throw webError(`AnySearch credential resolution failed: ${String(error)}`)
+  }
 }
 
 /** Prefer `content`, then `snippet`, as the portable `snippet` field. */
@@ -104,7 +131,7 @@ export class AnySearchProvider implements WebSearchProvider {
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
     const options = this.options()
     const apiKey = options.apiKey
-      ?? await options.resolveApiKey?.()
+      ?? await resolveApiKeyOf(options)
       ?? ''
     const headers: Record<string, string> = {
       'content-type': 'application/json',
@@ -124,14 +151,16 @@ export class AnySearchProvider implements WebSearchProvider {
       })
     } catch (error) {
       // Cancellation is the caller's abort, not a provider failure.
-      if (error instanceof DOMException && error.name === 'AbortError') throw error
+      if (isAbort(error)) throw error
       throw webError(`AnySearch request failed: ${String(error)}`)
     }
 
     let envelope: AnySearchEnvelope
     try {
       envelope = await response.json() as AnySearchEnvelope
-    } catch {
+    } catch (error) {
+      // An abort during the body read is cancellation too, not a malformed answer.
+      if (isAbort(error)) throw error
       throw webError(`AnySearch returned a non-JSON response (HTTP ${response.status})`)
     }
     // The vendor CLI accepts an absent `code` as success; only a non-zero one fails.

@@ -281,3 +281,51 @@ test('the card binds to the form the 0.1.7 page supplies', () => {
   // configuration.
   assert.equal(row.options.key, `${PACKAGE_NAME}#web-search-anysearch`)
 })
+
+test('a cleared form field unsets its override instead of writing an empty value', () => {
+  const { formPlanOps } = loadBundle()
+  assert.deepEqual(formPlanOps(new Map()), [])
+  // Typing a value is a set; emptying the control, or pressing its reset, is the
+  // clear. Writing "" would leave a user-layer override that beats the
+  // composition value and the default, which is what broke the endpoint field.
+  assert.deepEqual(formPlanOps(new Map([['searchProvider', 'deepseek-official']])), [
+    { op: 'set', path: ['searchProvider'], value: 'deepseek-official' },
+  ])
+  assert.deepEqual(formPlanOps(new Map([['baseURL', '']])), [{ op: 'unset', path: ['baseURL'] }])
+})
+
+test('the card addresses the credential by the section reference and reports a refusal', async () => {
+  const { AnySearchCardController, apiKeyRefOf } = loadBundle()
+
+  assert.equal(apiKeyRefOf({ apiKeyEnv: 'MY_KEY' }), 'MY_KEY')
+  assert.equal(apiKeyRefOf({ apiKeyEnv: '' }), 'ANYSEARCH_API_KEY')
+  assert.equal(apiKeyRefOf(undefined), 'ANYSEARCH_API_KEY')
+
+  const written = []
+  const credentials = {
+    describe: async (refs) => ({
+      ok: true,
+      value: Object.fromEntries(refs.map(ref => [ref, { configured: ref === 'ANYSEARCH_API_KEY', writable: ref !== 'READ_ONLY' }])),
+    }),
+    set: async (ref, value) => {
+      written.push([ref, value])
+      return { ok: ref !== 'READ_ONLY' }
+    },
+  }
+  // No settings scope: this is the generation whose page owns the entry's form,
+  // and whose key therefore reaches the domain through this face alone.
+  const face = new AnySearchCardController(undefined, credentials).inject()
+  assert.deepEqual(await face.credentials.describe('ANYSEARCH_API_KEY'), { configured: true, writable: true })
+  assert.deepEqual(await face.credentials.describe('READ_ONLY'), { configured: false, writable: false })
+  assert.deepEqual(await face.credentials.save('ANYSEARCH_API_KEY', 'sekret'), { configured: true, writable: true })
+  assert.deepEqual(written, [['ANYSEARCH_API_KEY', 'sekret']])
+  // A refused write and a domain that does not answer both report "no answer",
+  // which is what keeps the card's draft and shows the failure.
+  assert.equal(await face.credentials.save('READ_ONLY', 'sekret'), undefined)
+  const silent = new AnySearchCardController(undefined, {
+    describe: async () => ({ ok: false }),
+    set: async () => ({ ok: false }),
+  }).inject()
+  assert.equal(await silent.credentials.describe('ANYSEARCH_API_KEY'), undefined)
+  assert.equal(await silent.credentials.save('ANYSEARCH_API_KEY', 'sekret'), undefined)
+})

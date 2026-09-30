@@ -1,7 +1,7 @@
 {
   "name": "@wenqi_bian/dsh-web-search-anysearch",
-  "version": "0.1.7-alpha.2",
-  "description": "AnySearch-backed WebSearchProvider for DeepSeek Harness (dsh): register AnySearch's /v1/search, switch explicitly between the official DeepSeek search endpoint and AnySearch from the Plugins page configuration, compatible with dsh v0.1.5-alpha.1 and later (see README).",
+  "version": "0.2.0-alpha.2",
+  "description": "AnySearch-backed WebSearchProvider for DeepSeek Harness (dsh): register AnySearch's /v1/search, switch explicitly between the official DeepSeek search endpoint and AnySearch from the Plugins page configuration, compatible with dsh v0.1.5-alpha.1 and later, including the 0.2.0 line from v0.2.0-rc.2 on (see README).",
   "keywords": [
     "dsh",
     "dsh-plugin",
@@ -54,6 +54,7 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/provider.test.mjs tests/settings.test.mjs tests/client-smoke.test.mjs",
+    "compat": "node scripts/check-dsh-compatibility.mjs",
     "prepack": "node scripts/build.mjs"
   },
   "dsh": {
@@ -69,11 +70,11 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-credentials": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1",
-    "@deepseek-ai/dsh-launch-environment": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1",
-    "@deepseek-ai/dsh-settings": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1",
-    "@deepseek-ai/dsh-web": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1",
-    "@deepseek-ai/dsh-web-search-deepseek": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1"
+    "@deepseek-ai/dsh-credentials": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2",
+    "@deepseek-ai/dsh-launch-environment": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2",
+    "@deepseek-ai/dsh-settings": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2",
+    "@deepseek-ai/dsh-web": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2",
+    "@deepseek-ai/dsh-web-search-deepseek": "^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-web-search-deepseek": {

@@ -2,6 +2,109 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.0-alpha.2] - 2026-09-30
+
+First release of the `0.2.0` line, version aligned with the harness release it is
+verified against (`dsh-v0.2.0-rc.2`, pin `639ed015`), following the sibling
+plugins' convention of naming each release after the dsh tag it targets.
+
+### Fixed
+
+- **The plugin is admissible again on dsh `0.2.0`.** `0.2.0-rc.1` introduced the
+  admission gate that reads a plugin's own `@deepseek-ai/dsh-*` peer ranges
+  *before* importing it, and skips a whole bundle (with a `skipping profile
+  bundle …` diagnostic) or blocks a row whose ranges do not accept the running
+  version. `^0.1.7-alpha.1` excludes `0.2.0-rc.2` under npm's prerelease
+  semantics, so on `0.2.0-rc.2` both the bundle layer and the composition row
+  were refused. Every `@deepseek-ai/dsh-*` peer now reads
+  `^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2`; the
+  checks were run with dsh's own `evaluatePluginCompatibility`, and `0.2.0-rc.2`,
+  `0.2.0` and `0.2.x` are admitted while `0.3.0` remains a deliberate refusal.
+- **The official re-route can authenticate a DeepSeek account session.**
+  `0.2.0-rc.1` made a search started by a Session on the `deepseek-account` model
+  route authenticate with the account token, and the built-in provider now asks
+  for that token on every search. The delegated backend passed only an API key,
+  so on an account session without `DEEPSEEK_API_KEY` the switch to the official
+  backend failed with `WEB_PROVIDER_CREDENTIAL_MISSING` where the built-in
+  provider would have searched. `resolveDeepSeekOptions` now projects
+  `resolveAccountToken` through `ctx.get` — no new import, and a release or
+  deployment without the `agents` / `deepseekAccount` seams answers `undefined`,
+  which is the unchanged API-key path.
+- **The form page's clear writes an unset, not an empty value.** Emptying or
+  resetting the endpoint control stored `""` in the user layer, which outranks the
+  composition value and the schema default, so every AnySearch search afterwards
+  failed on a relative URL. Drafts now plan `unset` for an empty value and `set`
+  otherwise, matching the shipped form model and this plugin's own settings-seam
+  path; `formPlanOps` is a pure function with its own test.
+- **The form page no longer claims an override that is not there.** It asked the
+  resolved section whether a field was overridden, so a value supplied by the
+  profile or the environment showed the reset affordance; it now asks the raw user
+  layer, as the settings-seam path does.
+- **Provider failures and cancellation are told apart.** A credential-resolver
+  failure surfaces as this seam's `WEB_PROVIDER_ERROR` instead of a raw rejection,
+  and an abort while the response body is read stays the caller's cancellation
+  instead of being reported as a malformed answer.
+- **A non-finite `maxResults` asks for the ceiling** instead of serializing as
+  `maxResults: null`.
+- **The delegation's load failure no longer echoes a local path.** It names the
+  failure code (`ERR_MODULE_NOT_FOUND`) or the error name.
+- **`installSection` reports nothing.** Its boolean return could not know whether
+  the registration happened, because the settings service may be provided after
+  the call; it no longer pretends to.
+
+### Changed
+
+- **The card's API key control writes through the credentials domain on every
+  page generation.** On a page that owns the entry's form the typed key used to be
+  saved into the entry itself (`config.apiKey`), and since the page generation
+  never read the credential state, the control also showed "not configured" and
+  echoed a stored secret back into the password input. The key now always goes to
+  the credentials domain under the reference the section names, the field starts
+  blank on every load, and the badge reports what the domain holds. A literal
+  `apiKey` written into the profile by hand still wins, and is still redacted over
+  the wire by its `secret` role.
+- **CI asserts admission rather than only building.** `npm run compat` runs the
+  harness release's own `evaluatePluginCompatibility` against this package's peer
+  ranges, so a range that stops covering the leg's runtime fails the leg; harness
+  releases before the gate report that they have nothing to assert.
+- **Compat claims and the CI matrix cover `dsh-v0.2.0-rc.2`.** The matrix gained
+  the `dsh-v0.2.0-rc.2` leg (pin `639ed015`), and both READMEs state the
+  `0.2.0` admission gate, the widened peer ranges, and the account-token
+  behaviour of the official backend.
+
+### Verified
+
+- `typecheck`, `build` and all 32 tests pass in an isolated tree wired to the
+  **published** `0.2.0-rc.2` artifacts (`npm`'s copies of `dsh-web`,
+  `dsh-web-search-deepseek`, `dsh-settings`, `dsh-credentials`,
+  `dsh-launch-environment`, `dsh-api-remotes`, the four `dsh-client-*` packages,
+  `cordis` 4.0.4 and `schemastery` 3.18.4) with no resolution into the local
+  harness checkout, and the freshly built halves are byte-identical to the packed
+  tarball. Negative controls (an injected type error in each half) fail the
+  typecheck, so the green run is real.
+- The admission verdict was produced by the published `@deepseek-ai/dsh-app-boot@0.2.0-rc.2`
+  bundle's own `evaluatePluginCompatibility` — `0.2.0-rc.2` admitted, `0.2.0-rc.1`
+  and `0.3.0` refused — and matches the local implementation on every version tried.
+- The runtime half was exercised on the installed `0.2.0-rc.2` harness in a
+  throwaway DSH home: `dsh plugin add <tarball>` succeeds, `--dump-config`
+  composes the bundle layer and the row with a 0-byte stderr and no `skipping`
+  diagnostic, and two boots of the shipped web app put the plugin in
+  `__DSH_BOOT__.entries` and serve its client bundle with the payload bytes equal
+  to the packed `lib/client.js` (the only difference is the boot revision the
+  loader rewrites into the sourcemap comment).
+- Control (from the first adaptation round): the same manifest with the
+  `|| ^0.2.0-rc.2` arm removed is refused at **both** gates — the install rejects
+  it with `installation rejected: … is incompatible with dsh 0.2.0-rc.2:
+  peerDependencies {…}` and rolls the profile back, and a hand-seeded profile logs
+  `skipping profile bundle …` with zero `anysearch` rows composed. That is the
+  breakage this release removes.
+- Evidence: `.compat/runtime-0.2.0-rc.2.md`, `.compat/runtime-0.2.0-rc.2-review-pass.md`,
+  `.compat/rc2-artifacts/verify-report.md`, `.compat/rc2-artifacts/verify-report-2.md`,
+  `.compat/source-audit-0.2.0-rc.2.md` (all gitignored local notes).
+- Not covered: no browser rendering or clicking, so the card is asserted through
+  its registration contract and component trees rather than a painted UI; the
+  scope-path badge refresh after a key write is covered by unit tests only.
+
 ## [0.1.7-alpha.2] - 2026-09-22
 
 Compatibility range narrowed to **dsh `v0.1.5-alpha.1` and later**. (dsh never
@@ -284,6 +387,7 @@ it is verified against (v0.1.2-alpha.1 ~ rc.1).
 - Build now emits both the host bundle (`lib/index.js`) and the client bundle
   (`lib/client.js`); `exports["./client"]` added.
 
+[0.2.0-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.2.0-alpha.2
 [0.1.7-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.7-alpha.2
 [0.1.7-alpha.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.7-alpha.1
 [0.1.6-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.6-alpha.2

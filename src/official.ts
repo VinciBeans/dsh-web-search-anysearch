@@ -13,7 +13,9 @@
  * one cross-plugin dependency to this module. Its options are projected per
  * search from the `web-search-deepseek` settings section, with environment and
  * constant fallbacks, so the built-in DeepSeek search card stays the single
- * place that configures the official endpoint.
+ * place that configures the official endpoint. The delegation also asks for the
+ * DeepSeek account token on dsh releases that authenticate a search that way,
+ * so a re-route behaves like the built-in provider on an account session.
  * @module @wenqi_bian/dsh-web-search-anysearch/official
  */
 
@@ -32,6 +34,14 @@ export const DEEPSEEK_SEARCH_BASE_URL_ENV = 'DEEPSEEK_SEARCH_BASE_URL'
 
 /** Credential reference the official provider resolves when its section names none. */
 export const DEEPSEEK_DEFAULT_API_KEY_ENV = 'DEEPSEEK_API_KEY'
+
+/**
+ * Model route id the DeepSeek account sign-in registers. `dsh 0.2.0-rc.1` made a
+ * search initiated by a Session on this route authenticate with the account
+ * token instead of an API key, and the built-in provider asks for that token on
+ * every search; a re-route that does not ask can only present a key.
+ */
+export const DEEPSEEK_ACCOUNT_PROVIDER = 'deepseek-account'
 
 /**
  * Local fallbacks mirroring the built-in provider's exported defaults. They
@@ -59,6 +69,11 @@ interface DeepSeekDefaults {
 export interface DeepSeekOptionsLike {
   apiKey?: string
   resolveApiKey?: () => Promise<string | undefined>
+  /**
+   * Resolve the account token for one endpoint; releases before `0.2.0-rc.1`
+   * ignore the field, and `undefined` selects API-key authentication everywhere.
+   */
+  resolveAccountToken?: (endpoint: string) => Promise<string | undefined>
   apiKeyEnv?: CredentialRef
   baseURL: string
   model: string
@@ -167,6 +182,37 @@ function defaultsOf(module: DeepSeekModuleLike | undefined): DeepSeekDefaults {
 }
 
 /**
+ * Resolve the DeepSeek account token for one search endpoint, the way the
+ * built-in provider's own `resolveOptions` does: only a Session whose model
+ * route is the DeepSeek account signs a search in, and only while the account
+ * service is composed and willing to release a token for that endpoint.
+ *
+ * Both services are reached through `ctx.get` so a release that composes
+ * neither leaves the field answering `undefined` — the API-key path — instead
+ * of failing the search.
+ * @param ctx - plugin context; `agents` and `deepseekAccount` are optional seams.
+ * @param endpoint - the Messages endpoint the search dispatches to.
+ * @returns the account token, or undefined to authenticate with an API key.
+ */
+async function resolveAccountToken(ctx: Context, endpoint: string): Promise<string | undefined> {
+  // Both services are read as the structural shape the built-in provider also
+  // depends on (`@deepseek-ai/dsh-web-search-deepseek`'s own `resolveOptions`).
+  // Every member is checked before use, so a release that reshapes either
+  // service falls back to API-key authentication instead of failing the search.
+  const agents = ctx.get('agents') as {
+    currentInitiator?: () => { session?: { requestContext?: () => { provider?: unknown } | undefined } } | undefined
+  } | undefined
+  if (typeof agents?.currentInitiator !== 'function') return undefined
+  const provider = agents.currentInitiator()?.session?.requestContext?.()?.provider
+  if (provider !== DEEPSEEK_ACCOUNT_PROVIDER) return undefined
+  const account = ctx.get('deepseekAccount') as {
+    resolveToken?: (endpoint: string) => Promise<string | undefined>
+  } | undefined
+  if (typeof account?.resolveToken !== 'function') return undefined
+  return await account.resolveToken(endpoint)
+}
+
+/**
  * Project the DeepSeek side's options for the NEXT search. Field order mirrors
  * the built-in provider's own `resolveOptions`: section, environment, default.
  * @param ctx - plugin context supplying the settings, credential, and environment planes.
@@ -185,6 +231,7 @@ export function resolveDeepSeekOptions(ctx: Context, defaults: DeepSeekDefaults)
   return {
     ...typeof declaredKey === 'string' && declaredKey.length > 0 ? { apiKey: declaredKey } : {},
     resolveApiKey: () => readCredential(ctx, apiKeyEnv),
+    resolveAccountToken: (endpoint: string) => resolveAccountToken(ctx, endpoint),
     apiKeyEnv,
     baseURL: stringOf(ctx, section, 'baseURL', DEEPSEEK_SEARCH_BASE_URL_ENV, defaults.baseURL),
     model: stringOf(ctx, section, 'model', undefined, defaults.model),
@@ -230,10 +277,27 @@ export function createDeepSeekBackend(ctx: Context): OfficialSearchBackend {
       if (provider === undefined) {
         throw webError(
           'official DeepSeek search backend is unavailable: @deepseek-ai/dsh-web-search-deepseek'
-          + ` could not be loaded (${String(failure)})`,
+          + ` could not be loaded (${loadFailureOf(failure)})`,
         )
       }
       return provider.search(request, signal)
     },
   }
+}
+
+/**
+ * Name one module-load failure without echoing it verbatim.
+ *
+ * The message would carry this machine's module-resolution paths into an error
+ * the model reads back; the code (`ERR_MODULE_NOT_FOUND`) or the error name is
+ * enough to tell a package that is absent from one that failed to evaluate.
+ * @param failure - the rejection the dynamic import settled with.
+ * @returns a stable short reason.
+ */
+export function loadFailureOf(failure: unknown): string {
+  if (failure instanceof Error) {
+    const code = (failure as NodeJS.ErrnoException).code
+    return typeof code === 'string' && code.length > 0 ? code : failure.name
+  }
+  return typeof failure
 }

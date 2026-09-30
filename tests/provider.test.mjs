@@ -132,6 +132,61 @@ test('clamps maxResults up to 1 as the floor', async () => {
   assert.equal(JSON.parse(captured.body).max_results, 1)
 })
 
+test('a non-finite maxResults is asked for as the ceiling, never serialized as null', async () => {
+  const bodies = []
+  globalThis.fetch = async (url, init) => {
+    bodies.push(JSON.parse(init.body))
+    return new Response(JSON.stringify({ code: 0, data: { results: [] } }), { status: 200 })
+  }
+  const provider = new AnySearchProvider({ baseURL: BASE })
+  for (const maxResults of [Number.NaN, Number.POSITIVE_INFINITY]) {
+    await provider.search({ query: 'q', maxResults })
+    assert.equal(bodies.at(-1).max_results, 10)
+  }
+})
+
+test('a credential resolver failure is reported as a provider error', async () => {
+  globalThis.fetch = async () => { throw new Error('must not dispatch without a credential') }
+  const provider = new AnySearchProvider({
+    baseURL: BASE,
+    resolveApiKey: async () => { throw new Error('vault down') },
+  })
+  await assert.rejects(provider.search({ query: 'q' }), (error) => {
+    // Callers route on the seam's machine code, so a raw rejection would leave
+    // them without an answer.
+    assert.equal(error.code, 'WEB_PROVIDER_ERROR')
+    assert.match(error.message, /credential resolution failed: Error: vault down/)
+    return true
+  })
+})
+
+test('an aborted credential resolver stays the caller cancellation', async () => {
+  globalThis.fetch = async () => { throw new Error('must not dispatch on cancellation') }
+  const provider = new AnySearchProvider({
+    baseURL: BASE,
+    resolveApiKey: async () => { throw new DOMException('aborted', 'AbortError') },
+  })
+  await assert.rejects(provider.search({ query: 'q' }), (error) => error.name === 'AbortError')
+})
+
+test('an abort while the body is read is cancellation, not a malformed answer', async () => {
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => { throw new DOMException('aborted', 'AbortError') },
+  })
+  const provider = new AnySearchProvider({ baseURL: BASE })
+  await assert.rejects(provider.search({ query: 'q' }), (error) => error.name === 'AbortError')
+})
+
+test('a failed delegation load names the reason without a local path', async () => {
+  const { loadFailureOf } = await import('../lib/index.js')
+  const missing = Object.assign(new Error('Cannot find module /home/runner/app/lib/index.js'), { code: 'ERR_MODULE_NOT_FOUND' })
+  assert.equal(loadFailureOf(missing), 'ERR_MODULE_NOT_FOUND')
+  assert.equal(loadFailureOf(new TypeError('bad export')), 'TypeError')
+  assert.equal(loadFailureOf('nope'), 'string')
+})
+
 test('anonymous access sends no Authorization header', async () => {
   let captured
   globalThis.fetch = async (url, init) => {
@@ -226,6 +281,61 @@ test('the switch provider routes to the section-named backend', async () => {
   assert.equal(calls[1].url, 'https://search.official.test/v1/messages')
   assert.equal(calls[1].init.method, 'POST')
   assert.ok(calls[1].init.headers['anthropic-version'])
+})
+
+test('the delegated official backend signs in the way the installed release asks', async () => {
+  const { createDeepSeekBackend } = await import('../lib/index.js')
+  const { DeepSeekSearchProvider } = await import('@deepseek-ai/dsh-web-search-deepseek')
+  const calls = []
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init })
+    return new Response(JSON.stringify(ONE_RESULT), { status: 200 })
+  }
+
+  // Shape probe, not a version check: `0.2.0-rc.1` made the provider prefer an
+  // account token over every API key, and the release that did is exactly the
+  // one whose search carries `x-dsh-auth-token` instead of `x-api-key`.
+  await new DeepSeekSearchProvider(() => ({
+    baseURL: 'https://search.official.test/v1',
+    model: 'deepseek-v4-flash',
+    apiVersion: '2023-06-01',
+    maxTokens: 4096,
+    maxUses: 5,
+    resolveAccountToken: async () => 'acct-token',
+    resolveApiKey: async () => 'dsk',
+  })).search({ query: 'q' })
+  const supportsAccountToken = calls[0].init.headers['x-dsh-auth-token'] === 'acct-token'
+
+  let route = 'deepseek-account'
+  const ctx = {
+    get: (service) => {
+      if (service === 'agents') {
+        return { currentInitiator: () => ({ session: { requestContext: () => ({ provider: route }) } }) }
+      }
+      if (service === 'deepseekAccount') return { resolveToken: async (endpoint) => `acct:${endpoint}` }
+      if (service === 'credentials') return { resolve: async () => ({ value: 'dsk' }) }
+      return undefined
+    },
+  }
+  const backend = createDeepSeekBackend(ctx)
+  await backend.search({ query: 'q' })
+  const accountCall = calls.at(-1)
+  if (supportsAccountToken) {
+    // The plugin asks for the token the same way the built-in provider does, so
+    // an account session re-routed through this card still searches without a key.
+    assert.equal(accountCall.init.headers['x-dsh-auth-token'], 'acct:https://api.deepseek.com/anthropic/v1/messages')
+    assert.equal(accountCall.init.headers['x-api-key'], undefined)
+  } else {
+    // Releases before that ignore the field: the API key stays the only credential.
+    assert.equal(accountCall.init.headers['x-dsh-auth-token'], undefined)
+    assert.equal(accountCall.init.headers['x-api-key'], 'dsk')
+  }
+
+  // Every other route authenticates with the key on every release.
+  route = 'deepseek'
+  await backend.search({ query: 'q' })
+  assert.equal(calls.at(-1).init.headers['x-api-key'], 'dsk')
+  assert.equal(calls.at(-1).init.headers['x-dsh-auth-token'], undefined)
 })
 
 test('apply registers the switch provider and reads the switch from the section', async () => {

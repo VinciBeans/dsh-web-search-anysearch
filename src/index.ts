@@ -46,8 +46,10 @@ export {
 export type { SearchBackend } from './router.ts'
 export {
   createDeepSeekBackend,
+  DEEPSEEK_ACCOUNT_PROVIDER,
   DEEPSEEK_FALLBACK_DEFAULTS,
   DEEPSEEK_SEARCH_SETTINGS_NAMESPACE,
+  loadFailureOf,
 } from './official.ts'
 export { WEB_PROVIDER_ERROR, webError } from './errors.ts'
 export {

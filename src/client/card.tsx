@@ -1,13 +1,16 @@
 /**
  * The AnySearch configuration form: its backend switch, the AnySearch
- * endpoint, and the AnySearch key — written through the credentials domain,
- * never into the settings section, so the literal never rides a response.
+ * endpoint, and the AnySearch key. The key is the one control that never enters
+ * the entry's values: every page generation writes it through the credentials
+ * domain under the reference the section names, so the literal stays out of the
+ * settings document and never rides a response.
  *
  * Three page generations render this component, and it answers each with the
  * shape that generation supplies:
  *
- * - `form` present (`0.1.7-alpha.1`): the page owns the entry's values and its
- *   write command, so the card stages a draft and saves through `form.mutate`.
+ * - `form` present (`0.1.7-alpha.1` and later): the page owns the entry's values
+ *   and its write command, so the card stages a draft and saves through
+ *   `form.mutate`.
  * - `view: 'page'` without a form (`0.1.6-alpha.2`): the card reads the settings
  *   seam itself through the injected face and owns its save control.
  * - no `view` (pre-0.1.6): a disclosure card with its own chrome, save and
@@ -18,7 +21,8 @@
  */
 
 import * as React from 'react'
-import type { AnySearchCardState } from './controller.ts'
+import { apiKeyRefOf, formPlanOps } from './controller.ts'
+import type { AnySearchCardFace, AnySearchCardState, CredentialStatus } from './controller.ts'
 import type { AnySearchLocaleKey } from './locales.ts'
 import type { PageConfigForm, PluginConfigViewProps } from './index.ts'
 import { classes as css } from './styles.ts'
@@ -29,6 +33,8 @@ export interface AnySearchCardProps {
   t: (key: AnySearchLocaleKey) => string
   /** Card snapshot selector (bound from the inject face's hooks compartment). */
   useAnysearchCard: <S>(selector: (state: AnySearchCardState) => S, equal?: (a: S, b: S) => boolean) => S
+  /** The credentials domain, for the control that never writes into the entry's values. */
+  credentials: AnySearchCardFace['credentials']
   /** Stage draft text for one field. */
   edit: (field: string, text: string) => void
   /** Stage a clear, so saving lets the field re-inherit the composition layer. */
@@ -96,45 +102,83 @@ interface FormCardProps extends AnySearchCardProps {
 /**
  * The configuration body on a page that supplies the entry's form.
  *
- * The page owns the form: `form.state` is the value it read for this render,
- * and `form.mutate` is the revision-fenced write whose answer says whether the
- * Host accepted it. The draft therefore lives here — the card decides what a
- * save sends — and a landed write clears it, so the page's next render re-seeds
- * every control from the Host.
+ * The page owns the form: `form.state` is the value it read for this render, and
+ * `form.mutate` is the revision-fenced write whose answer says whether the Host
+ * accepted it. The draft therefore lives here — the card decides what a save
+ * sends — and a landed write clears it, so the page's next render re-seeds every
+ * control from the Host.
+ *
+ * The API key is the exception: it is not part of the entry's values on any page
+ * generation, so it stages separately and is written through the credentials
+ * domain under the reference the section names. The control starts blank and
+ * never echoes a stored secret.
  * @param props - locale copy, the page's form, and the card's own actions.
  * @returns the controls with this card's save control.
  */
 function FormCard(props: FormCardProps) {
   const [drafts, setDrafts] = React.useState<ReadonlyMap<string, string>>(() => new Map())
+  const [keyDraft, setKeyDraft] = React.useState('')
+  const [credential, setCredential] = React.useState<CredentialStatus>({ configured: false, writable: true })
   const [saving, setSaving] = React.useState(false)
   const [failed, setFailed] = React.useState(false)
   const { state } = props.form
   const value = state.value ?? {}
+  const ref = apiKeyRefOf(value)
   const draftOf = (field: string): string => drafts.get(field) ?? textOf(value[field])
-  const dirty = drafts.size > 0
+  const key = keyDraft.trim()
+  const dirty = drafts.size > 0 || key !== ''
+  // The face is rebuilt on every render, so the effect reads it through a ref and
+  // depends only on the reference it addresses.
+  const credentials = React.useRef(props.credentials)
+  credentials.current = props.credentials
+  React.useEffect(() => {
+    let live = true
+    void credentials.current.describe(ref).then((status) => {
+      if (live && status !== undefined) setCredential(status)
+    })
+    return () => { live = false }
+  }, [ref])
   // A save that did not land keeps its drafts, so the user can correct them.
   const edit = (field: string, text: string): void => {
-    setDrafts((current) => new Map(current).set(field, text))
+    if (field === 'apiKey') setKeyDraft(text)
+    else setDrafts((current) => new Map(current).set(field, text))
     setFailed(false)
   }
   const reset = (field: string): void => {
-    // An empty draft is the clear the Host resolves back to the base layer.
+    // An empty draft is the user's clear; formPlanOps submits it as `unset`, so
+    // the field re-inherits the composition layer instead of holding "".
     setDrafts((current) => new Map(current).set(field, ''))
     setFailed(false)
   }
   const save = (): void => {
-    const ops = [...drafts].map(([field, text]) => ({ op: 'set' as const, path: [field], value: text }))
+    const ops = formPlanOps(drafts)
     setSaving(true)
     setFailed(false)
-    void props.form.mutate(ops, state.revision)
-      .then((landed) => {
-        if (landed) setDrafts(new Map())
+    const writes: Promise<boolean>[] = []
+    if (ops.length > 0) writes.push(props.form.mutate(ops, state.revision))
+    if (key !== '') {
+      writes.push(credentials.current.save(ref, key).then((status) => {
+        if (status !== undefined) setCredential(status)
+        return status !== undefined
+      }))
+    }
+    void Promise.all(writes)
+      .then((results) => {
+        const landed = results.every(Boolean)
+        if (landed) {
+          setDrafts(new Map())
+          setKeyDraft('')
+        }
         setSaving(false)
         setFailed(!landed)
       })
       .catch(() => { setSaving(false); setFailed(true) })
   }
 
+  // The raw user layer, not the resolved section: only a field the user (or a
+  // patch) actually overrides carries the reset affordance.
+  const user = state.user
+  const overridden = (field: string): boolean => user !== undefined && Object.hasOwn(user, field)
   const cardState: AnySearchCardState = {
     available: true,
     writable: state.writable,
@@ -145,15 +189,13 @@ function FormCard(props: FormCardProps) {
     backend: {
       // The switch always names a backend; an absent field reads as the default.
       text: draftOf('searchProvider') || ANYSEARCH_BACKEND_DEFAULT,
-      overridden: Object.hasOwn(value, 'searchProvider'),
+      overridden: overridden('searchProvider'),
       invalid: false,
     },
-    baseURL: { text: draftOf('baseURL'), overridden: Object.hasOwn(value, 'baseURL'), invalid: false },
-    apiKey: { text: draftOf('apiKey'), overridden: false, invalid: false },
-    // The credential badge lives on the settings seam, which this page
-    // generation does not expose to the card; the control still writes the key.
-    apiKeyConfigured: false,
-    apiKeyWritable: state.writable,
+    baseURL: { text: draftOf('baseURL'), overridden: overridden('baseURL'), invalid: false },
+    apiKey: { text: keyDraft, overridden: false, invalid: false },
+    apiKeyConfigured: credential.configured,
+    apiKeyWritable: credential.writable,
   }
 
   return (

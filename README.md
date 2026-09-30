@@ -1,113 +1,87 @@
-# dsh-web-search-anysearch
+# AnySearch for DeepSeek Harness
 
-An [AnySearch](https://www.anysearch.com) web search provider for [DeepSeek Harness (dsh)](https://github.com/deepseek-ai/DeepSeek-Harness), with an explicit switch between the official DeepSeek search endpoint and AnySearch — editable from the Web GUI as a card on the Plugins settings page, exactly like dsh's built-in plugin cards.
+Switch `web_search` between [AnySearch](https://www.anysearch.com) and the official DeepSeek search endpoint, from the dsh Plugins page.
 
-dsh exposes one model-facing `web_search` tool and picks the real backend through the `ctx.web` seam. This bundle registers a switch provider under the `anysearch` id that calls `POST https://api.anysearch.com/v1/search` when AnySearch is selected, and delegates to the official DeepSeek search endpoint when it is not. Anonymous AnySearch access is allowed; an API key raises the rate limit.
+[![npm version](https://img.shields.io/npm/v/@wenqi_bian/dsh-web-search-anysearch.svg)](https://www.npmjs.com/package/@wenqi_bian/dsh-web-search-anysearch)
+[![license](https://img.shields.io/npm/l/@wenqi_bian/dsh-web-search-anysearch.svg)](./LICENSE)
 
-## Compatibility
-
-**Requires dsh `v0.1.5-alpha.1` or later.** The CI matrix verifies every release from that floor: v0.1.5-alpha.1, v0.1.5-alpha.2, v0.1.5-rc.1, v0.1.5-rc.2, v0.1.6-alpha.2 and v0.1.7-alpha.1. (dsh never published a `0.1.4` — the lineage runs `0.1.3-alpha.2` → `0.1.5-alpha.1`.)
-
-### Settings and page generations
-
-Two contracts this plugin consumes have two shapes each across that range, and every release carries exactly one. The plugin detects which, so one build serves the whole range.
-
-**The settings seam.** Through `0.1.6-alpha.2`, a plugin registered its configuration with `ctx.settings.installSection(...)` and read it through the scope that came back. `0.1.7-alpha.1` removed that call: a schema field marked `.volatile()` is handed to `apply` as a stable reference whose `get()` returns the live value, and the framework commits a profile edit into that reference instead of remounting the plugin. This plugin's schema marks every field volatile where the installed schema builder supports it (`.volatile()` arrived in schemastery 3.18.3, which 0.1.7 is the first release to ship), reads fields through either shape, and registers a section only where an installer still exists. Its "official DeepSeek search" delegation likewise reads that plugin's entry from the loader (its live config) and falls back to the settings service on releases that lack one.
-
-**The Plugins page.** `0.1.6-alpha.2` replaced the card list with a page that dispatches a bundle's own configuration; `0.1.7-alpha.1` moved that to a per-row page and hands the entry's values and write command to the card as owner props. The browser half registers into the three slots this range has known — `plugins.row.config` (keyed `<package>#<row id>`, what 0.1.7 asks for, with the page supplying the form), `plugins.bundle.config` (keyed by package name, 0.1.6), and `settings.plugin.item` (the `0.1.5` line) — and a slot a deployment's page does not declare is simply never injected. So the card appears on this row's page on 0.1.7, on the bundle's page on 0.1.6, and in **设置 → 插件 → 插件配置** on 0.1.5.
-
-The host half's routing, the `cordis.patch.yml` pin and the credentials handling are the same across the whole range.
-
-### Support policy
-
-The range starts at **`v0.1.5-alpha.1`**. The `0.1.2` line (`v0.1.2-alpha.1` ~ `v0.1.2-rc.1`) and `v0.1.3-alpha.2` are **no longer supported**: this plugin version does not carry their code paths (the 0.1.2 line's module-level settings installer), its peer ranges reject them, and the CI matrix no longer verifies them. If your harness is pinned below the floor, stay on the plugin release that named that line — `0.1.3-alpha.2` (npm `alpha`) or `0.1.2-rc.1` (npm `latest`) — which remain published and frozen.
+dsh exposes one model-facing `web_search` tool and picks its backend through the `ctx.web` seam. This bundle registers a provider under the `anysearch` id: it calls `POST https://api.anysearch.com/v1/search` when AnySearch is selected, and delegates to the official DeepSeek search endpoint when it is not. Anonymous AnySearch access works; an API key raises the rate limit.
 
 ## Install
 
-Releases are version-aligned with the harness: each version is built for, and named after, the matching `@deepseek-ai/dsh` release.
-
-Requires a DSH install whose `web` profile has been initialized (start the Web GUI once).
-
-### From npm
-
-Pick the dist-tag that matches your harness:
-
-1. **npm `alpha`** — the current npm build:
-
-   ```bash
-   dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
-   ```
-
-2. **npm `latest`** (`0.1.2-rc.1`) — the frozen 0.1.2 line, for harnesses **below** this plugin's floor:
-
-   ```bash
-   dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch
-   ```
-
-The npm package ships the prebuilt host and client bundles, so no build step is needed on install. A published build only supports the harness floor it was released against — check this README at that release's tag if you are pinning an older one.
-
-### From source
-
-The source version — `0.1.7-alpha.2`, what the GitHub Release `v0.1.7-alpha.2` ships — is for local development:
-
 ```bash
-dsh plugin --profile web add .
+dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
 ```
 
-`dsh` links the checkout, appends the bundle layer to `dsh.profile.bundles`, and applies `cordis.patch.yml`, which registers the provider row **and pins `web.searchProvider: anysearch`** (later patch layers still win, so a deployment that pins its own value keeps it). Rebuild after any code change with `npm run build`. On 0.1.6 and later the Plugins page renders a configuration only for a bundle the profile lists, so install it as a bundle rather than adding a composition row by hand. **Restart `dsh web`** to pick up bundle layers and the served client bundle. Inspect before restarting:
+Restart `dsh web` afterwards: profile bundles and the served browser half are read at startup. Inspect the composed tree without booting:
 
-```sh
+```bash
 dsh --profile web --dump-config
 ```
 
-Migration: if your profile patch already has a manual `web-search-anysearch` row (for example the `./anysearch-search.mjs` setup), delete that row first - the bundle layer adds the same row id, and duplicate ids fail the load.
+Each plugin release is built for, and named after, the dsh release it targets, and ships prebuilt host and browser halves. Hosts below the supported floor can stay on the frozen `0.1.2` line with `dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@latest` (no `dist-tag` by default; `latest` is `0.1.2-rc.1`).
 
-## Switch the search service from the GUI
+Upgrading from a hand-written row: delete any existing `web-search-anysearch` entry from your profile patch before installing the bundle. The bundle adds the same row id, and duplicate ids fail the load.
 
-On dsh `0.1.7-alpha.1`, open **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch` → the `web-search-anysearch` row** — the row's page carries the configuration. On `0.1.6-alpha.2`, open **设置 → 插件 → `@wenqi_bian/dsh-web-search-anysearch`** (the bundle's own page). On the `0.1.5` line, open **设置 → 插件 → 插件配置 → AnySearch 搜索服务**. Either way the form's first control is the switch; saving it re-routes the very next `web_search` — no restart needed:
+## Quickstart
 
-- **AnySearch** (default) - calls `POST {base}/v1/search` with the card's API key / endpoint fields.
-- **官方 DeepSeek 搜索** - delegates to the built-in DeepSeek search path. Its key, endpoint, model, and budget stay configured by dsh's own **Web search** (DeepSeek) card; the switch just selects that backend.
+1. Open **Settings → Plugins → `@wenqi_bian/dsh-web-search-anysearch`** and open the `web-search-anysearch` row.
+2. Leave the switch on **AnySearch**, or pick **official DeepSeek search**.
+3. Save. The next `web_search` uses the backend you picked, with no restart.
 
-The **API key** field on the form feeds the entry's `apiKey`; leave it blank and the provider resolves `apiKeyEnv` (`ANYSEARCH_API_KEY` by default) through the credentials domain instead. See the Known limitations note on how a typed key is persisted.
+AnySearch needs no credential. To raise its rate limit, type the key into the card's **API key** field, which stores it in the credentials domain, or put it there yourself under the `ANYSEARCH_API_KEY` reference (see [Configuration](#configuration)).
 
-## Fallback ways to switch (config file, still honored)
+The row's page is where dsh `0.1.7-alpha.1` and later, including `0.2.0`, render this form. On `0.1.6-alpha.2` it is the bundle's own page; on the `0.1.5` line it is **Settings → Plugins → Plugin configuration → AnySearch 搜索服务**.
 
-Later layers win, and the bundle pins `anysearch` only; anything below overrides it for a whole launch:
+## Compatibility
 
-1. **Profile patch line** - edit `$DSH_HOME/profiles/web/cordis.patch.yml`:
+The supported range starts at dsh `v0.1.5-alpha.1`; every release from that floor is verified in CI, up to `v0.2.0-rc.2`. Within the `0.2.0` line the floor is `v0.2.0-rc.2` itself. The `0.1.2` line and `v0.1.3-alpha.2` are not supported: pin `0.1.3-alpha.2` or `0.1.2-rc.1` if your harness is older. dsh never published a `0.1.4`.
+
+**The `0.2.0` admission gate.** From `0.2.0-rc.1`, dsh reads a plugin's `@deepseek-ai/dsh-*` peer ranges before importing it and refuses a bundle, or blocks a row, whose ranges do not accept the running version. The declared range is the whole compatibility claim, so this package names each verified line: `^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2`. A runtime outside it is refused on purpose, with the incompatible peers printed and `dsh plugin allow-version` offered as the exact-version exemption.
+
+Two contracts underneath that range have two shapes each, and this build detects which one is installed rather than branching on a version string:
+
+- **Settings.** Through `0.1.6-alpha.2` a plugin registered its section with `ctx.settings.installSection(...)`. From `0.1.7-alpha.1` that call is gone: a schema field marked `.volatile()` reaches `apply` as a stable reference whose `get()` returns the live value, so a committed edit re-routes the next search instead of remounting the plugin.
+- **Plugins page.** `0.1.6-alpha.2` renders a bundle's own configuration, `0.1.7-alpha.1` a row's page with the entry's live values passed in as owner props. The browser half registers into all three slots this range has known and stays dormant where a deployment declares none.
+
+## Configuration
+
+| Config key | Control | Default | Meaning |
+| --- | --- | --- | --- |
+| `searchProvider` | Backend switch | `anysearch` | Which backend serves the next `web_search`: `anysearch` or `deepseek-official`. |
+| `apiKeyEnv` | API key field | `ANYSEARCH_API_KEY` | Where the card stores a typed key, in the credentials domain. The reference is resolved per search. |
+| `apiKey` | | unset | A literal key written into the profile by hand. It wins over the reference and is redacted over the wire by its `secret` role. |
+| `baseURL` | Endpoint field | `https://api.anysearch.com` | AnySearch base; `/v1/search` is appended. Overridden by `ANYSEARCH_API_BASE_URL`. |
+
+The credential domain resolves a reference in this order: `$DSH_HOME/.credentials.yaml`, then `$DSH_HOME/.env`, then the inherited environment. Leave both key fields unset to search anonymously.
+
+The switch also has three non-GUI equivalents, and later layers win over the bundle's own pin of `web.searchProvider: anysearch`:
 
 ```yaml
+# $DSH_HOME/profiles/web/cordis.patch.yml
 - id: web
   config:
     searchProvider: anysearch          # or deepseek-official
     fetchProvider: http                # the patch replaces the whole config
 ```
 
-2. **One-shot overlay** (no file edit of the profile):
-
-```sh
-dsh web --patch examples/use-anysearch.cordis.yml
+```bash
 dsh web --patch examples/use-deepseek-official.cordis.yml
-```
-
-3. **Environment variable** for a whole launch:
-
-```sh
 DSH_WEB_SEARCH_PROVIDER=anysearch dsh web
 ```
 
-The seam still requires an explicit pin when more than one usable provider is registered; configuration errors surface as `WEB_PROVIDER_CONFIGURED_MISSING` / `WEB_PROVIDER_CONFIGURED_UNAVAILABLE`. The switch card edits the `web-search-anysearch` settings namespace, so a profile- or env-level pin of a different provider (for example `exa`) takes the card entirely out of the serving path.
+Whichever layer pins it, a pin that names another provider (for example `exa`) takes this card out of the serving path entirely.
 
 ## Known limitations
 
-- **General search only.** The dsh seam request carries `query` and `maxResults`; AnySearch vertical domains (`finance.quote` etc.), their required params, `zone`/`language`, and the `/v1/extract` endpoint are not reachable through `web_search`.
-- The configuration form appears only when the dsh web GUI is composed with this plugin (browser half via `dsh.client`) **and** this bundle is in the profile's `dsh.profile.bundles` — from 0.1.6 the form belongs to the bundle's or the row's page, so a profile that only lists the row without the bundle shows no form. Headless profiles keep full functionality through the config-file switch.
-- On `0.1.7-alpha.1`, a config edit committed from the profile editor reaches the running plugin through its Volatile reference and re-routes the next `web_search` without a restart. A field the schema builder could not mark volatile (schemastery < 3.18.3, i.e. dsh ≤ 0.1.6) is resolved through the settings section instead, as before.
-- When the official backend is selected, its availability follows the built-in DeepSeek search settings (a key and a valid endpoint are required); AnySearch remains anonymous-friendly. The built-in plugin `@deepseek-ai/dsh-web-search-deepseek` is an **optional peer**, loaded on demand: a deployment without it still loads this plugin and serves AnySearch, while the official side reports unavailable.
-- The API key can be written two ways, and they persist differently. The **API key** field on the form is an ordinary config field of this profile entry, so a value typed there is saved into the profile patch (`config.apiKey`, redacted over the wire by its `secret` role). It is never required: leave it blank and the plugin resolves `apiKeyEnv` — `ANYSEARCH_API_KEY` by default — through the credentials domain (`$DSH_HOME/.credentials.yaml` > `$DSH_HOME/.env` > the inherited environment), which is the path to prefer. Anonymous requests are allowed either way.
-- A search query is sent to `https://api.anysearch.com` (override with `ANYSEARCH_API_BASE_URL` or the card's endpoint field); treat results as untrusted external data.
+- **General search only.** The seam request carries `query` and `maxResults`; AnySearch vertical domains (`finance.quote` and friends), their required params, `zone`/`language`, and `/v1/extract` are not reachable through `web_search`.
+- The form appears only when the web GUI composes this plugin's browser half **and** the bundle is listed in the profile's `dsh.profile.bundles`. Headless profiles keep the full feature set through the config-file switch.
+- The official backend follows the built-in DeepSeek search settings: a credential (`DEEPSEEK_API_KEY`, or a DeepSeek account sign-in on `0.2.0` and later) and a valid endpoint. The built-in plugin `@deepseek-ai/dsh-web-search-deepseek` is an optional peer, imported on first use; a deployment without it still serves AnySearch.
+- The **API key** field is write-only: a typed key goes into the credentials domain under `apiKeyEnv`, and a stored secret is never read back into the form. There is no control that removes a stored key yet; revoke one in the credentials store or from the page that manages it.
+- Queries are sent to `https://api.anysearch.com`, or to whatever endpoint you configure. Treat search results as untrusted external data.
 
 ## License
 
 MIT
+
+Contributor setup, the CI matrix, and the release convention live in [CONTRIBUTING.md](./CONTRIBUTING.md).

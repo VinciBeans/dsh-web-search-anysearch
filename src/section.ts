@@ -105,12 +105,15 @@ interface SettingsService {
  * The 0.1.2 line's module-level `installSettingsSection` export is gone from
  * this code: that line and 0.1.3 are below the supported floor.
  *
+ * The call is deferred to whenever the settings service is provided, which the
+ * injection may do after this function returns; it therefore reports nothing
+ * back.
+ *
  * @param ctx - the plugin's context (also the section's owner for disposal).
  * @param ns - the settings namespace this plugin owns.
  * @param schema - the section schema, as a configuration surface renders it.
  * @param entry - the plugin's composition entry; the section's base layer.
  * @param hooks - source sink and change notification.
- * @returns whether a section installer took the registration.
  */
 export function installSection<T>(
   ctx: Context,
@@ -118,8 +121,7 @@ export function installSection<T>(
   schema: unknown,
   entry: T,
   hooks: SettingsSectionHooks<T>,
-): boolean {
-  let installed = false
+): void {
   ctx.inject(['settings'], (settingsCtx: Context) => {
     const service = settingsCtx.get('settings') as SettingsService | undefined
     // Call it through the service so `this` binds to the provider; an unbound
@@ -132,7 +134,5 @@ export function installSection<T>(
       entry,
       hooks as unknown as SettingsSectionHooks<unknown>,
     )
-    installed = true
   })
-  return installed
 }

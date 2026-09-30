@@ -24,6 +24,16 @@ export const ANYSEARCH_SETTINGS_NS = 'web-search-anysearch'
 /** Credential reference resolved when the section names none. */
 export const ANYSEARCH_DEFAULT_API_KEY_ENV = 'ANYSEARCH_API_KEY'
 
+/**
+ * The credential reference a section names, or this plugin's default.
+ * @param section - the resolved section, or undefined while none is served.
+ * @returns the reference the credentials domain is addressed by.
+ */
+export function apiKeyRefOf(section: Record<string, unknown> | undefined): string {
+  const declared = section?.apiKeyEnv
+  return typeof declared === 'string' && declared.length > 0 ? declared : ANYSEARCH_DEFAULT_API_KEY_ENV
+}
+
 /** Backend values of the switch. */
 export const ANYSEARCH_BACKENDS = ['anysearch', 'deepseek-official'] as const
 
@@ -63,12 +73,14 @@ export interface SettingsScopeSnapshot {
 }
 
 /**
- * The bound scope a card stages over. The plugin reaches one through whichever
- * seam the installed dsh offers — `ctx.configForms.get(namespace)` on
- * `0.1.7-alpha.1`, `ctx.settingsScope.bind({ namespace })` before it — and the
- * newer one is adapted to this shape in `client/index.ts`. Writes report
- * whether the Host accepted the value, which is the only reliable signal: a
- * refused write leaves the document unchanged.
+ * The bound scope a card stages over. Only the page generations that leave the
+ * card to reach the settings seam itself use one: `ctx.settingsScope.bind({ namespace })`
+ * serves this shape on `0.1.6-alpha.2` and its predecessors, and `client/index.ts`
+ * binds it. A page that owns the entry's form (`0.1.7-alpha.1` and later) instead
+ * passes its values and `mutate` command to the card as owner props, and the
+ * form-backed card in `card.tsx` writes through those without a scope. Writes
+ * report whether the Host accepted the value, which is the only reliable signal:
+ * a refused write leaves the document unchanged.
  */
 export interface SettingsScope {
   getSnapshot(): SettingsScopeSnapshot
@@ -91,6 +103,14 @@ export interface CardFieldState {
   overridden: boolean
   /** Whether the draft is not a value this field accepts (blocks the save). */
   invalid: boolean
+}
+
+/** Credentials-domain answers for one reference, as the card renders them. */
+export interface CredentialStatus {
+  /** Whether the domain holds a value for the reference. */
+  configured: boolean
+  /** Whether the domain accepts a write for the reference. */
+  writable: boolean
 }
 
 /** What the AnySearch card renders. */
@@ -124,6 +144,26 @@ export interface AnySearchCardFace {
   hooks: {
     /** Card snapshot bound by the renderer as useAnysearchCard. */
     anysearchCard: SnapshotStore<AnySearchCardState>
+  }
+  /**
+   * The credentials domain, addressed by the reference the section names. A
+   * page that owns the entry's form writes its key here, because the key is not
+   * part of the entry's values on any page generation.
+   */
+  credentials: {
+    /**
+     * Read one reference's state.
+     * @param ref - credential reference.
+     * @returns the state, or undefined when the domain did not answer.
+     */
+    describe: (ref: string) => Promise<CredentialStatus | undefined>
+    /**
+     * Store one secret.
+     * @param ref - credential reference.
+     * @param value - the secret to store.
+     * @returns the state after the write, or undefined when the domain refused it.
+     */
+    save: (ref: string, value: string) => Promise<CredentialStatus | undefined>
   }
   /** Stage draft text for one field. */
   edit: (field: string, text: string) => void
@@ -183,6 +223,10 @@ export class AnySearchCardController {
   inject(): AnySearchCardFace {
     return {
       hooks: { anysearchCard: this.snapshot },
+      credentials: {
+        describe: (ref) => this.describeCredential(ref),
+        save: (ref, value) => this.saveCredential(ref, value),
+      },
       edit: (field, text) => { this.stage(field, { text, clear: false }) },
       resetField: (field) => { this.stage(field, { text: this.baseText(field), clear: true }) },
       save: () => { void this.save() },
@@ -348,14 +392,39 @@ export class AnySearchCardController {
   }
 
   private async writeKey(value: string): Promise<boolean> {
-    await this.credentials.set(this.apiKeyRef(), value)
+    const status = await this.saveCredential(this.apiKeyRef(), value)
+    // Republish from the domain either way: a refused write leaves the previous
+    // state standing, and an accepted one refreshes the configured badge.
     await this.readCredential()
-    return this.credential.configured
+    return status !== undefined
   }
 
   private apiKeyRef(): string {
-    const declared = this.view().value?.apiKeyEnv
-    return typeof declared === 'string' && declared.length > 0 ? declared : ANYSEARCH_DEFAULT_API_KEY_ENV
+    return apiKeyRefOf(this.view().value)
+  }
+
+  /**
+   * Read one reference's credential state.
+   * @param ref - credential reference.
+   * @returns the state, or undefined when the domain did not answer.
+   */
+  async describeCredential(ref: string): Promise<CredentialStatus | undefined> {
+    const response = await this.credentials.describe([ref])
+    if (!response.ok) return undefined
+    const view = response.value?.[ref]
+    return { configured: view?.configured ?? false, writable: view?.writable ?? true }
+  }
+
+  /**
+   * Store one secret and report the state the domain then holds for it.
+   * @param ref - credential reference.
+   * @param value - the secret to store.
+   * @returns the state after the write, or undefined when the domain refused it.
+   */
+  async saveCredential(ref: string, value: string): Promise<CredentialStatus | undefined> {
+    const response = await this.credentials.set(ref, value)
+    if (!response.ok) return undefined
+    return await this.describeCredential(ref)
   }
 
   /**
@@ -369,14 +438,9 @@ export class AnySearchCardController {
       this.credential = { ref, configured: false, writable: true }
       this.publish()
     }
-    const response = await this.credentials.describe([ref])
-    if (!response.ok || ref !== this.apiKeyRef()) return
-    const view = response.value?.[ref]
-    const next = {
-      ref,
-      configured: view?.configured ?? false,
-      writable: view?.writable ?? true,
-    }
+    const status = await this.describeCredential(ref)
+    if (status === undefined || ref !== this.apiKeyRef()) return
+    const next = { ref, ...status }
     if (next.configured === this.credential.configured && next.writable === this.credential.writable) return
     this.credential = next
     this.publish()
@@ -415,4 +479,28 @@ function parsedWrite(
   }
   // baseURL: free text; an empty draft clears the field.
   return text === '' ? { kind: 'clear' } : { kind: 'set', value: text }
+}
+
+/** One field write a page that owns the entry's form applies. */
+export type FormFieldOp =
+  | { op: 'set'; path: string[]; value: string }
+  | { op: 'unset'; path: string[] }
+
+/**
+ * Project staged drafts into the writes a form-owning page applies.
+ *
+ * An empty draft is the user's clear and becomes `unset`, so the field
+ * re-inherits the composition layer; anything else is a `set`. Writing an empty
+ * string instead would leave a user-layer override holding `""`, which then
+ * wins over the composition value and the schema default.
+ *
+ * The API key never appears here: it is stored in the credentials domain, not
+ * in the entry's values.
+ * @param drafts - staged text by field, as the form's controls produced it.
+ * @returns the ops to submit, in staging order.
+ */
+export function formPlanOps(drafts: ReadonlyMap<string, string>): FormFieldOp[] {
+  return [...drafts].map(([field, text]) => text === ''
+    ? { op: 'unset' as const, path: [field] }
+    : { op: 'set' as const, path: [field], value: text })
 }

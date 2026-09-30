@@ -39,6 +39,11 @@ import { en, zh, LOCALE_NS } from './locales.ts'
 import type { AnySearchLocaleKey } from './locales.ts'
 import { injectCardStyles } from './styles.ts'
 
+// The stages the browser half owns are exported so the smoke test can exercise
+// the form's write plan and the credential path without a React renderer.
+export { AnySearchCardController, apiKeyRefOf, formPlanOps } from './controller.ts'
+export type { CredentialStatus, FormFieldOp } from './controller.ts'
+
 /** One field edit the Host applies atomically; mirrors the client settings wire op. */
 export interface SettingsPathOp {
   /** `set` writes the value at the path, `unset` removes it. */
