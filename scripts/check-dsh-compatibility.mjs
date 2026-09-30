@@ -2,8 +2,8 @@
  * Assert this package's `@deepseek-ai/dsh-*` peer ranges accept the harness
  * checked out beside it.
  *
- * dsh `0.2.0-rc.1` added the admission gate that reads those ranges before it
- * imports a plugin, and refuses a bundle or row whose ranges exclude the running
+ * The admission gate arrived with dsh `0.1.7-rc.1`: it reads those ranges before
+ * importing a plugin, and refuses a bundle or row whose ranges exclude the running
  * version. This runs that release's own `evaluatePluginCompatibility`, so the
  * check cannot drift from the runtime it mirrors. Releases before the gate have
  * nothing to assert and say so instead of passing silently.

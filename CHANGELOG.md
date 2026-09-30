@@ -2,21 +2,22 @@
 
 All notable changes to this project are documented here.
 
-## [0.2.0-alpha.2] - 2026-09-30
+## [0.2.0-rc.2] - 2026-09-30
 
-First release of the `0.2.0` line, version aligned with the harness release it is
-verified against (`dsh-v0.2.0-rc.2`, pin `639ed015`), following the sibling
-plugins' convention of naming each release after the dsh tag it targets.
+First release of the `0.2.0` line, carrying the exact version of the harness tag
+it is verified against (`dsh-v0.2.0-rc.2`, pin `639ed015`) the way every sibling
+release is named after its dsh tag.
 
 ### Fixed
 
-- **The plugin is admissible again on dsh `0.2.0`.** `0.2.0-rc.1` introduced the
-  admission gate that reads a plugin's own `@deepseek-ai/dsh-*` peer ranges
-  *before* importing it, and skips a whole bundle (with a `skipping profile
-  bundle …` diagnostic) or blocks a row whose ranges do not accept the running
-  version. `^0.1.7-alpha.1` excludes `0.2.0-rc.2` under npm's prerelease
-  semantics, so on `0.2.0-rc.2` both the bundle layer and the composition row
-  were refused. Every `@deepseek-ai/dsh-*` peer now reads
+- **The plugin is admissible again on dsh `0.2.0`.** The admission gate — present
+  since `dsh-v0.1.7-rc.1`, and enforced on the whole `0.2.0` line — reads a
+  plugin's own `@deepseek-ai/dsh-*` peer ranges *before* importing it, and skips a
+  whole bundle (with a `skipping profile bundle …` diagnostic) or blocks a row
+  whose ranges do not accept the running version. `^0.1.7-alpha.1` excludes
+  `0.2.0-rc.2` under npm's prerelease semantics, so on `0.2.0-rc.1` and
+  `0.2.0-rc.2` both the bundle layer and the composition row were refused. Every
+  `@deepseek-ai/dsh-*` peer now reads
   `^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2`; the
   checks were run with dsh's own `evaluatePluginCompatibility`, and `0.2.0-rc.2`,
   `0.2.0` and `0.2.x` are admitted while `0.3.0` remains a deliberate refusal.
@@ -67,10 +68,14 @@ plugins' convention of naming each release after the dsh tag it targets.
   harness release's own `evaluatePluginCompatibility` against this package's peer
   ranges, so a range that stops covering the leg's runtime fails the leg; harness
   releases before the gate report that they have nothing to assert.
-- **Compat claims and the CI matrix cover `dsh-v0.2.0-rc.2`.** The matrix gained
-  the `dsh-v0.2.0-rc.2` leg (pin `639ed015`), and both READMEs state the
-  `0.2.0` admission gate, the widened peer ranges, and the account-token
-  behaviour of the official backend.
+- **Compat claims and the CI matrix cover every published release in the declared
+  range.** The matrix grew from seven legs to eleven: the four `0.1.5` tags it
+  already had plus `dsh-v0.1.5-rc.3`, and `dsh-v0.1.7-alpha.2`, `dsh-v0.1.7-rc.1`,
+  `dsh-v0.1.7-rc.2` and `dsh-v0.2.0-rc.2`. Every pin was checked against the tag
+  in `deepseek-ai/DeepSeek-Harness`, and all four new legs were pre-flighted
+  against the published artifacts of their release before being added. Both
+  READMEs now state the admission gate, the widened peer ranges, and the
+  account-token behaviour of the official backend.
 
 ### Verified
 
@@ -387,7 +392,7 @@ it is verified against (v0.1.2-alpha.1 ~ rc.1).
 - Build now emits both the host bundle (`lib/index.js`) and the client bundle
   (`lib/client.js`); `exports["./client"]` added.
 
-[0.2.0-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.2.0-alpha.2
+[0.2.0-rc.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.2.0-rc.2
 [0.1.7-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.7-alpha.2
 [0.1.7-alpha.1]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.7-alpha.1
 [0.1.6-alpha.2]: https://github.com/VinciBeans/dsh-web-search-anysearch/releases/tag/v0.1.6-alpha.2

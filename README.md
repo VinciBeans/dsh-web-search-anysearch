@@ -19,7 +19,7 @@ Restart `dsh web` afterwards: profile bundles and the served browser half are re
 dsh --profile web --dump-config
 ```
 
-Each plugin release is built for, and named after, the dsh release it targets, and ships prebuilt host and browser halves. `alpha` tracks the current release; pin one exactly with `@wenqi_bian/dsh-web-search-anysearch@0.2.0-alpha.2`. Hosts below the supported floor pin the frozen line explicitly: `dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@0.1.2-rc.1`.
+Each plugin release carries the exact version of the dsh tag it targets and ships prebuilt host and browser halves. `alpha` tracks the current release; pin one exactly with `@wenqi_bian/dsh-web-search-anysearch@0.2.0-rc.2`. Hosts below the supported floor pin the frozen line explicitly: `dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@0.1.2-rc.1`.
 
 Upgrading from a hand-written row: delete any existing `web-search-anysearch` entry from your profile patch before installing the bundle. The bundle adds the same row id, and duplicate ids fail the load.
 
@@ -35,9 +35,9 @@ The row's page is where dsh `0.1.7-alpha.1` and later, including `0.2.0`, render
 
 ## Compatibility
 
-The supported range starts at dsh `v0.1.5-alpha.1`; every release from that floor is verified in CI, up to `v0.2.0-rc.2`. Within the `0.2.0` line the floor is `v0.2.0-rc.2` itself. The `0.1.2` line and `v0.1.3-alpha.2` are not supported: pin `0.1.3-alpha.2` or `0.1.2-rc.1` if your harness is older. dsh never published a `0.1.4`.
+The supported range starts at dsh `v0.1.5-alpha.1`, and the CI matrix verifies every published release inside it: the five `0.1.5` tags (`alpha.1`, `alpha.2`, `rc.1`, `rc.2`, `rc.3`), `0.1.6-alpha.2`, the four `0.1.7` tags (`alpha.1`, `alpha.2`, `rc.1`, `rc.2`) and `0.2.0-rc.2`. Within the `0.2.0` line the floor is `v0.2.0-rc.2` itself: `v0.2.0-rc.1` is refused. The `0.1.2` line and `v0.1.3-alpha.2` are not supported: pin `0.1.3-alpha.2` or `0.1.2-rc.1` if your harness is older, and note that `v0.1.6-alpha.1` sits below the floor. dsh never published a `0.1.4`.
 
-**The `0.2.0` admission gate.** From `0.2.0-rc.1`, dsh reads a plugin's `@deepseek-ai/dsh-*` peer ranges before importing it and refuses a bundle, or blocks a row, whose ranges do not accept the running version. The declared range is the whole compatibility claim, so this package names each verified line: `^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2`. A runtime outside it is refused on purpose, with the incompatible peers printed and `dsh plugin allow-version` offered as the exact-version exemption.
+**The admission gate.** Since `v0.1.7-rc.1`, dsh reads a plugin's `@deepseek-ai/dsh-*` peer ranges before importing it and refuses a bundle, or blocks a row, whose ranges do not accept the running version. The declared range is the whole compatibility claim, so this package names each verified line: `^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2`. The `0.2.0` line is where those ranges stopped covering the runtime, which is why `v0.2.0-rc.1` and `v0.2.0-rc.2` were refused before this release. A runtime outside the range is refused on purpose, with the incompatible peers printed and `dsh plugin allow-version` offered as the exact-version exemption.
 
 Two contracts underneath that range have two shapes each, and this build detects which one is installed rather than branching on a version string:
 

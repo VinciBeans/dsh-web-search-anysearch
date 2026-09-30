@@ -37,7 +37,7 @@ Runtime checks follow the same rule: install the packed tarball into a throwaway
 
 ## Release convention
 
-Releases are version-aligned with the harness: `0.2.0-alpha.2` is built for, and named after, the dsh `0.2.0` line. Bump `version` in `package.json`, add a `CHANGELOG.md` entry that names the verified tag and its pin, and publish through the `alpha` dist-tag.
+Releases carry the exact version of the dsh tag they are verified against: `0.2.0-rc.2` targets dsh `v0.2.0-rc.2`, just as `0.1.7-alpha.2` targeted `dsh-v0.1.7-alpha.2`. Bump `version` in `package.json`, add a `CHANGELOG.md` entry that names the verified tag and its pin, and publish on the current-release dist-tag (`alpha`).
 
 Widening the supported range is part of an adaptation release, not a separate one:
 

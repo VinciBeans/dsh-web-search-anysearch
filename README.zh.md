@@ -19,7 +19,7 @@ dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@alpha
 dsh --profile web --dump-config
 ```
 
-每个插件版本针对、并命名为它所适配的 dsh 发布，包内已附预构建的宿主与浏览器 bundle。`alpha` 跟随当前发布；需要精确固定时写 `@wenqi_bian/dsh-web-search-anysearch@0.2.0-alpha.2`。低于支持下限的宿主请显式固定已冻结的 `0.1.2` 线：`dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@0.1.2-rc.1`。
+每个插件版本精确采用它所适配的 dsh tag 的版本号，包内已附预构建的宿主与浏览器 bundle。`alpha` 跟随当前发布；需要精确固定时写 `@wenqi_bian/dsh-web-search-anysearch@0.2.0-rc.2`。低于支持下限的宿主请显式固定已冻结的 `0.1.2` 线：`dsh plugin --profile web add @wenqi_bian/dsh-web-search-anysearch@0.1.2-rc.1`。
 
 从手写行升级：安装 bundle 前请先删掉 profile patch 里已有的 `web-search-anysearch` 行。bundle 会添加同一个行 id，重复 id 会导致加载失败。
 
@@ -35,9 +35,9 @@ AnySearch 无需凭据。若要提高限流，把 key 填进卡片的 **API Key*
 
 ## 兼容性
 
-支持范围自 dsh `v0.1.5-alpha.1` 起，CI 逐一验证该下限到 `v0.2.0-rc.2` 的每个发布。`0.2.0` 线内的下限就是 `v0.2.0-rc.2` 本身。`0.1.2` 线与 `v0.1.3-alpha.2` 不在支持范围内：宿主更早时请固定 `0.1.3-alpha.2` 或 `0.1.2-rc.1`。dsh 从未发布 `0.1.4`。
+支持范围自 dsh `v0.1.5-alpha.1` 起，CI 逐一验证区间内的**每个已发布版本**：`0.1.5` 线全部五个（`alpha.1`、`alpha.2`、`rc.1`、`rc.2`、`rc.3`）、`0.1.6-alpha.2`、`0.1.7` 线全部四个（`alpha.1`、`alpha.2`、`rc.1`、`rc.2`）与 `0.2.0-rc.2`。`0.2.0` 线内的下限就是 `v0.2.0-rc.2` 本身：`v0.2.0-rc.1` 被拒。`0.1.2` 线与 `v0.1.3-alpha.2` 不在支持范围内：宿主更早时请固定 `0.1.3-alpha.2` 或 `0.1.2-rc.1`；注意 `v0.1.6-alpha.1` 在范围下限之前。dsh 从未发布 `0.1.4`。
 
-**`0.2.0` 的准入闸门。** 自 `0.2.0-rc.1` 起，dsh 在 import 插件之前先读取其 `@deepseek-ai/dsh-*` peer 范围，范围不接受正在运行的版本时拒绝整个 bundle 或拦下组合行。声明出来的范围就是全部兼容性主张，因此本包逐条列出已验证的版本线：`^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2`。范围之外的运行时是被刻意拒绝的，dsh 会打印不兼容的 peer，并给出 `dsh plugin allow-version` 作为精确版本豁免。
+**准入闸门。** 自 `v0.1.7-rc.1` 起，dsh 在 import 插件之前先读取其 `@deepseek-ai/dsh-*` peer 范围，范围不接受正在运行的版本时拒绝整个 bundle 或拦下组合行。声明出来的范围就是全部兼容性主张，因此本包逐条列出已验证的版本线：`^0.1.5-alpha.1 || ^0.1.6-alpha.2 || ^0.1.7-alpha.1 || ^0.2.0-rc.2`。`0.2.0` 线正是这些范围开始不再覆盖运行时的版本，所以在本版之前 `v0.2.0-rc.1` 与 `v0.2.0-rc.2` 都会被拒。范围之外的运行时是被刻意拒绝的，dsh 会打印不兼容的 peer，并给出 `dsh plugin allow-version` 作为精确版本豁免。
 
 该区间之下有两个契约各有两种形状，本构建探测实际安装的是哪一种，而不是按版本号分支：
 

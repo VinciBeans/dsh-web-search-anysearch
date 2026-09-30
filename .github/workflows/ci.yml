@@ -9,14 +9,17 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    # 多版本兼容矩阵：支持范围自 dsh-v0.1.5-alpha.1 起，故对 0.1.5 线全部四个
-    # tag（alpha.1 / alpha.2 / rc.1 / rc.2）、dsh-v0.1.6-alpha.2、
-    # dsh-v0.1.7-alpha.1 与 dsh-v0.2.0-rc.2 各验一遍 typecheck + build + test。
-    # 0.1.2 与 0.1.3 线已不在支持范围内，故从矩阵移除（dsh 从未发布 0.1.4）。
-    # 0.1.6 重建了 Plugins 页面，0.1.7 又换成 row 页面并把设置节改成 volatile
-    # 配置引用，两个 tag 各自验证客户端与服务端的形状选择；0.2.0-rc.2 引入了
-    # 插件准入（peer 范围必须覆盖运行时版本，否则 bundle 与行都会被拒），并且
-    # 官方搜索开始用账户令牌认证。
+    # 多版本兼容矩阵：支持范围自 dsh-v0.1.5-alpha.1 起，故对区间内**每个已发布 tag**
+    # 各验一遍准入断言 + typecheck + build + test：0.1.5 线全部五个（alpha.1 /
+    # alpha.2 / rc.1 / rc.2 / rc.3）、dsh-v0.1.6-alpha.2、0.1.7 线全部四个
+    # （alpha.1 / alpha.2 / rc.1 / rc.2）与 dsh-v0.2.0-rc.2，共 11 条腿。
+    # 不入矩阵的：0.1.2 / 0.1.3 线（已不在支持范围；dsh 从未发布 0.1.4）、
+    # 0.1.6-alpha.1（在范围下限之前）、0.2.0-rc.1（peer 范围刻意拒绝的预发布）。
+    # 0.1.6 重建了 Plugins 页面，0.1.7 换成 row 页面并把设置节改成 volatile 配置
+    # 引用，两个 tag 各自验证客户端与服务端的形状选择。准入闸门自 0.1.7-rc.1 起
+    # 存在（peer 范围必须覆盖运行时版本，否则 bundle 与行都会被拒），所以
+    # 0.1.7-rc.1 / rc.2 与 0.2.0-rc.2 跑的是真实断言，更早的腿走「无闸门可断言」
+    # 的跳过分支。0.2.0-rc.1 起官方搜索还开始支持账户令牌认证。
     strategy:
       fail-fast: false
       matrix:
@@ -29,10 +32,18 @@ jobs:
             pin: 183f08e9c6dde7e36cd2318eaee70b0da08fb35e
           - tag: dsh-v0.1.5-rc.2
             pin: fb2c4b9e698e30edb738bca4cf0618587db7d203
+          - tag: dsh-v0.1.5-rc.3
+            pin: a4c74a91e06b00fe0b0937bde982170c526cc842
           - tag: dsh-v0.1.6-alpha.2
             pin: ddefc45fbc7f8e46dd73185e68295696d1297887
           - tag: dsh-v0.1.7-alpha.1
             pin: c36a83ff6bb95e3f82cf79f9be7c724270a8aa61
+          - tag: dsh-v0.1.7-alpha.2
+            pin: 00102833dfaee1da9f48a3a8eae9d34005a75218
+          - tag: dsh-v0.1.7-rc.1
+            pin: 46a7f68b0922371ce7144b668b90e377d8e799f4
+          - tag: dsh-v0.1.7-rc.2
+            pin: 477b4f420553e8a52c2fbccc464d7561b239c443
           - tag: dsh-v0.2.0-rc.2
             pin: 639ed015397290b3745d163aafe02ffee4aa3f84
     steps:
